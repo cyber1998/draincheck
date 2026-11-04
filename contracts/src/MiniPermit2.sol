@@ -7,7 +7,10 @@ interface IERC20Like {
 }
 
 /// @title MiniPermit2
-/// @notice The SignatureTransfer part of Uniswap's Permit2, for the Draincheck sandbox only.
+/// @notice MINIMAL TEST STAND-IN for the Draincheck sandbox. NOT a Permit2 implementation:
+///         it only has the SignatureTransfer witness path (permitWitnessTransferFrom) that
+///         the x402 `upto` scheme uses. No AllowanceTransfer, no batch transfers, no
+///         ERC-1271. Never deploy it anywhere but a local anvil chain.
 /// @dev Same EIP-712 domain ("Permit2", chainId, verifyingContract), same type strings and
 ///      the same unordered nonce bitmap as canonical Permit2, so payloads signed for it
 ///      match the x402 `upto` spec. Draincheck installs it at the canonical Permit2 address

@@ -5,7 +5,8 @@ pragma solidity 0.8.30;
 import {MiniPermit2} from "./MiniPermit2.sol";
 
 /// @title X402UptoProxy
-/// @notice Local stand-in for x402's `x402UptoPermit2Proxy`, for the Draincheck sandbox only.
+/// @notice MINIMAL TEST STAND-IN for x402's `x402UptoPermit2Proxy`, for the Draincheck
+///         sandbox only (no settleWithPermit). Never deploy it outside a local anvil chain.
 /// @dev Same `settle` interface, witness type string and checks as the reference proxy
 ///      (x402-foundation/x402, contracts/evm/src/x402UptoPermit2Proxy.sol): the facilitator
 ///      named in the signed witness picks the final amount, up to the signed maximum, and
