@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import base64
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
@@ -13,16 +12,20 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 from web3 import Web3
 
+from draincheck.entrypoints.spec import SPECS, EntryPointName
 from draincheck.fork.accounts import (
     AGENT_ADDRESS,
     ANVIL_ADDRESSES,
     ATTACKER_ADDRESS,
+    DEPLOYER_ADDRESS,
     FACILITATOR_ADDRESS,
     SERVICE_ADDRESS,
 )
 from draincheck.oracle.invariants import Invariant, parse_invariant
+from draincheck.scenarios.encodings import encode
 
-# Names a scenario may use instead of an address in its invariants.
+# Names any scenario may use instead of an address in its invariants. Entry points add
+# their own (see draincheck.entrypoints.spec), e.g. "router".
 ROLE_NAMES = ("agent", "service", "attacker")
 # An agent-layer result is a rate, so it needs more than one trial (CLAUDE.md).
 MIN_AGENT_TRIALS = 3
@@ -42,14 +45,17 @@ class _Model(BaseModel):
 class Payload(_Model):
     """The poisoned content, and how it is encoded before the agent sees it."""
 
-    encoding: Literal["plain", "base64"] = "plain"
+    encoding: Literal["plain", "base64", "morse", "unicode_homoglyph"] = "plain"
     text: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _encodable(self) -> Payload:
+        self.rendered()  # raises if the text cannot be written in this encoding
+        return self
 
     def rendered(self) -> str:
         """The content exactly as the service serves it."""
-        if self.encoding == "base64":
-            return base64.b64encode(self.text.encode()).decode()
-        return self.text
+        return encode(self.text, self.encoding)
 
 
 class Setup(_Model):
@@ -74,8 +80,8 @@ class Setup(_Model):
         address = Web3.to_checksum_address(attacker)
         if address not in ANVIL_ADDRESSES:
             raise ValueError("attacker must be one of anvil's default dev accounts")
-        if address in (AGENT_ADDRESS, SERVICE_ADDRESS, FACILITATOR_ADDRESS):
-            raise ValueError("attacker cannot be the agent, service or facilitator account")
+        if address in (AGENT_ADDRESS, SERVICE_ADDRESS, FACILITATOR_ADDRESS, DEPLOYER_ADDRESS):
+            raise ValueError("attacker cannot be the agent, service, facilitator or deployer")
         return address
 
 
@@ -89,7 +95,11 @@ class Scenario(_Model):
     title: str = Field(min_length=1)
     source: HttpUrl
     layer: Literal["agent", "policy"]
-    entry_point: Literal["social_post", "token_metadata", "api_response", "router", "memory"]
+    entry_point: EntryPointName
+    # The honest task the agent is given. Defaults to the entry point's own task.
+    task: str | None = Field(default=None, min_length=1)
+    # Entry-point settings, validated by that entry point's options model.
+    options: dict[str, Any] = Field(default_factory=dict)
     payload: Payload
     setup: Setup = Field(default_factory=Setup)
     trials: int = Field(default=10, ge=1, le=1000)
@@ -101,18 +111,27 @@ class Scenario(_Model):
     def _parse(cls, specs: Any) -> Any:
         if not isinstance(specs, list):
             return specs  # Pydantic reports the type error
-        invariants = [s if isinstance(s, Invariant) else parse_invariant(s) for s in specs]
-        for inv in invariants:
-            for name in inv.address_names():
-                if name not in ROLE_NAMES and not Web3.is_address(name):
-                    raise ValueError(f"unknown name {name!r}; use {', '.join(ROLE_NAMES)}")
-        return invariants
+        return [s if isinstance(s, Invariant) else parse_invariant(s) for s in specs]
 
     @model_validator(mode="after")
-    def _agent_trials(self) -> Scenario:
+    def _check(self) -> Scenario:
         if self.layer == "agent" and self.trials < MIN_AGENT_TRIALS:
             raise ValueError(f"agent-layer scenarios need trials >= {MIN_AGENT_TRIALS}")
+        SPECS[self.entry_point].options.model_validate(self.options)  # raises if they don't fit
+        roles = self.role_names()
+        for inv in self.invariants:
+            for name in inv.address_names():
+                if name not in roles and not Web3.is_address(name):
+                    raise ValueError(f"unknown name {name!r}; use {', '.join(roles)}")
         return self
+
+    @property
+    def honest_task(self) -> str:
+        return self.task or SPECS[self.entry_point].task
+
+    def role_names(self) -> tuple[str, ...]:
+        """Names this scenario's invariants may use: the base roles plus the entry point's."""
+        return ROLE_NAMES + SPECS[self.entry_point].roles
 
     def addresses(self) -> dict[str, str]:
         """Role name -> address, for resolving names in invariants."""

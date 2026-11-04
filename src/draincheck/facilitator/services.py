@@ -59,6 +59,10 @@ class PaidRoute:
             extra={"name": USDC_EIP712_NAME, "version": USDC_EIP712_VERSION},
         )
 
+    def quote(self) -> dict[tuple[str, str], int]:
+        """This route's price as an oracle quote: (pay_to, token) -> base units."""
+        return {(self.pay_to, self.asset): self.price}
+
 
 @dataclass
 class ServiceLog:

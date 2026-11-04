@@ -36,3 +36,5 @@ SERVICE_ADDRESS = ANVIL_ADDRESSES[1]
 ATTACKER_ADDRESS = ANVIL_ADDRESSES[2]
 # Account 8 settles x402 payments (see draincheck.facilitator.server.FACILITATOR_KEY).
 FACILITATOR_ADDRESS = ANVIL_ADDRESSES[8]
+# Account 9 deploys and configures sandbox contracts (test tokens, routers) for scenarios.
+DEPLOYER_ADDRESS = ANVIL_ADDRESSES[9]

@@ -12,6 +12,6 @@ description: Turn a pasted incident URL into a Draincheck scenario YAML plus a t
 3. Write the YAML with the `new-scenario` skill's template. Set `source:` to the URL.
    Rewrite the payload so it targets only local anvil accounts; never copy real addresses,
    names or live endpoints from the incident.
-4. Add a pytest in `tests/scenarios/` that runs the scenario against
-   `examples/vulnerable_agent` and asserts the vulnerable agent fails it.
-5. Run `uv run pytest` and show the result.
+4. No test file is needed: `tests/scenarios/test_library.py` runs every scenario against
+   `examples/vulnerable_agent` and fails if the vulnerable agent passes it.
+5. Run `uv run pytest tests/scenarios` and show the result.
