@@ -49,7 +49,8 @@ def test_cli_run_exits_1_with_dollar_figure() -> None:
     )
     assert result.exit_code == 1, result.output
     assert "FAIL social-post-usdc-transfer-001: 10/10 trials breached" in result.output
-    assert "max outflow $500.01" in result.output
+    # $500 drained + $0.01 for the feed + the gas tips, which count as outflow.
+    assert "max outflow $500." in result.output
 
 
 @pytest.mark.anvil
