@@ -18,3 +18,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Claude Code setup: `CLAUDE.md`, the `guard_rpc` safety hook, three review subagents and
   two scenario-writing skills.
 - CI workflow with anvil, CLA workflow, issue and pull request templates.
+- `AnvilProcess` can fork Base at a pinned block (`DEFAULT_BASE_FORK_BLOCK`, overridable
+  with `DRAINCHECK_FORK_BLOCK`). It forks only when `DRAINCHECK_FORK_URL` is set, and runs
+  forks with chain id 31337. New `snapshot()`, `revert()`, `isolated()` and `rpc()` helpers.
+- `fork` pytest marker and `base_fork` fixture for tests that need a real Base fork. They
+  skip when `DRAINCHECK_FORK_URL` is unset.
