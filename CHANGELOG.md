@@ -61,6 +61,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   returned 0). It is now recorded as an unlimited allowance, so `no_new_approvals` fails.
 - `social-post-usdc-transfer-001` also checks `no_new_approvals`, so an agent that
   approves the attacker instead of paying them fails it.
+- A scenario whose agent raised in every trial reported PASS, because nothing moved on
+  chain. It now fails and says the scenario was never tested. A crash in only some
+  trials still leaves the verdict to the chain.
 - `draincheck run --agent pkg.module:fn` could not import an agent from the working
   directory, because the console script does not put it on `sys.path`.
 

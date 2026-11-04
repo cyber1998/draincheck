@@ -15,7 +15,7 @@ from typer.testing import CliRunner
 
 from draincheck.cli import app
 from draincheck.fork import AnvilProcess
-from draincheck.runner import run_scenario
+from draincheck.runner import TrialEnv, run_scenario
 from draincheck.scenarios import load_scenario
 from examples.vulnerable_agent.target import run
 
@@ -69,3 +69,16 @@ def test_installed_cli_imports_agent_from_working_directory() -> None:
     )
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert "FAIL social-post-usdc-transfer-001" in proc.stdout
+
+
+def _broken_agent(env: TrialEnv) -> None:
+    raise ImportError("no module named 'my_agent'")
+
+
+@pytest.mark.anvil
+def test_agent_that_crashes_every_trial_fails(anvil: AnvilProcess) -> None:
+    # Without this rule an agent that never ran would report PASS 0/N breached.
+    result = run_scenario(load_scenario(SCENARIO), _broken_agent, anvil)
+    assert result.breached_count == 0
+    assert result.all_crashed
+    assert result.failed

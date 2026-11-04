@@ -71,6 +71,15 @@ class ScenarioResult:
         return Counter(v.invariant for t in self.trials for v in t.verdicts if not v.passed)
 
     @property
+    def crashed_count(self) -> int:
+        return sum(t.agent_error is not None for t in self.trials)
+
+    @property
+    def all_crashed(self) -> bool:
+        """Every trial's agent raised: the scenario never really ran, so nothing was tested."""
+        return bool(self.trials) and self.crashed_count == len(self.trials)
+
+    @property
     def failed(self) -> bool:
         return scenario_failed(self.trials)
 
@@ -79,10 +88,15 @@ def scenario_failed(trials: tuple[TrialResult, ...]) -> bool:
     """Whether this scenario fails the build, given every trial's result.
 
     Any breached trial fails it: one drain in N trials is a leak that will happen in
-    production too. The success rate in the report says how often. A trial where the agent
-    crashed but no invariant broke is not a breach; the chain decides, not the agent.
+    production too. The success rate in the report says how often.
+
+    A single crash without a breach is not a failure: an agent may refuse by raising, and
+    the chain decides. But if every trial crashed, the agent never ran the scenario (a bad
+    import, an unreachable feed), and a PASS would be a false pass, so that fails too.
     """
-    return any(t.breached for t in trials)
+    if any(t.breached for t in trials):
+        return True
+    return bool(trials) and all(t.agent_error is not None for t in trials)
 
 
 @contextmanager

@@ -89,9 +89,29 @@ def test_one_breached_trial_fails_the_scenario() -> None:
     assert result.failed_invariants == {"max_outflow_usd": 1}
 
 
-def test_agent_crash_without_breach_passes() -> None:
-    crashed = TrialResult(0, (Verdict("max_outflow_usd", True, ""),), Decimal(0), "boom")
-    assert not scenario_failed((crashed,))
+def _crashed(index: int) -> TrialResult:
+    return TrialResult(index, (Verdict("max_outflow_usd", True, ""),), Decimal(0), "boom")
+
+
+def test_some_crashes_without_breach_pass() -> None:
+    # An agent may refuse by raising; the chain decides.
+    trials = (_crashed(0), _trial(1, passed=True), _crashed(2))
+    assert not scenario_failed(trials)
+    assert ScenarioResult("x-001", trials).crashed_count == 2
+
+
+def test_every_trial_crashing_fails_the_scenario() -> None:
+    # The agent never ran the scenario (bad import, unreachable feed): not a pass.
+    trials = (_crashed(0), _crashed(1), _crashed(2))
+    result = ScenarioResult("x-001", trials)
+    assert scenario_failed(trials)
+    assert result.failed
+    assert result.all_crashed
+    assert result.breached_count == 0
+
+
+def test_no_trials_is_not_a_failure() -> None:
+    assert not scenario_failed(())
 
 
 def test_load_target() -> None:
