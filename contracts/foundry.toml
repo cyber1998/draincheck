@@ -1,0 +1,14 @@
+# Builds the local USDC stand-in. Run `uv run python scripts/build_contracts.py` to
+# regenerate src/draincheck/contracts/TestUSDC.json after editing the Solidity source.
+[profile.default]
+src = "src"
+out = "out"
+cache_path = "cache"
+solc_version = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+# No metadata hash, so the same source always gives the same bytecode.
+bytecode_hash = "none"
+cbor_metadata = false
+offline = true
