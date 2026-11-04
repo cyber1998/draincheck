@@ -70,5 +70,8 @@ files = ["src", "tests", "examples"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["anvil: needs the anvil binary on PATH (skipped locally if missing, required in CI)"]
+markers = [
+    "anvil: needs the anvil binary on PATH (skipped locally if missing, required in CI)",
+    "fork: forks Base through DRAINCHECK_FORK_URL (skipped when it is unset, as in CI)",
+]
 addopts = "-ra --strict-markers"
