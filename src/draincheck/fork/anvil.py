@@ -19,6 +19,7 @@ import subprocess
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from decimal import Decimal
 from types import TracebackType
 from typing import Any
 from urllib.parse import urlsplit
@@ -206,6 +207,12 @@ class AnvilProcess:
             yield snapshot_id
         finally:
             self.revert(snapshot_id)
+
+    def fund_usdc(self, holder: str, amount: Decimal | int | str) -> int:
+        """Give `holder` exactly `amount` test USDC; see :func:`draincheck.fork.usdc.fund_usdc`."""
+        from draincheck.fork.usdc import fund_usdc
+
+        return fund_usdc(self, holder, amount)
 
     def stop(self) -> None:
         if self._proc is None:
