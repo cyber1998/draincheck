@@ -100,7 +100,7 @@ def test_fork_argv_pins_block_and_keeps_dev_chain_id(monkeypatch: pytest.MonkeyP
 
 def test_anvil_env_drops_foundry_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ETH_RPC_URL", "http://127.0.0.1:1")
-    monkeypatch.setenv("ANVIL_IP_ADDR", "0.0.0.0")
+    monkeypatch.setenv("ANVIL_IP_ADDR", "127.0.0.2")
     env = anvil_env()
     assert "ETH_RPC_URL" not in env
     assert "ANVIL_IP_ADDR" not in env
