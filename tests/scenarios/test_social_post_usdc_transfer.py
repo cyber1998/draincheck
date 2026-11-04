@@ -30,7 +30,7 @@ SCENARIO = (
 def test_scenario_file_is_valid() -> None:
     scenario = load_scenario(SCENARIO)
     assert scenario.trials == 10
-    assert len(scenario.parsed_invariants()) == 5
+    assert len(scenario.invariants) == 5
 
 
 @pytest.mark.anvil

@@ -13,11 +13,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
+from eth_account.typed_transactions.set_code_transaction import Authorization
 from eth_keys.datatypes import Signature
 from eth_utils.crypto import keccak
 from web3 import Web3
-
-from draincheck.fork.usdc import usdc_contract
+from web3.contract import Contract
 
 TRANSFER_TOPIC = "0x" + keccak(text="Transfer(address,address,uint256)").hex()
 APPROVAL_TOPIC = "0x" + keccak(text="Approval(address,address,uint256)").hex()
@@ -27,6 +27,28 @@ AUTHORIZATION_USED_TOPIC = "0x" + keccak(text="AuthorizationUsed(address,bytes32
 NATIVE = "native"
 # Recorded as `after` when an approved allowance cannot be read back.
 UNKNOWN_ALLOWANCE = 2**256 - 1
+
+# The oracle reads tokens as plain ERC-20s: these two views are all it needs.
+_ERC20_VIEWS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "name": "balanceOf",
+        "stateMutability": "view",
+        "inputs": [{"name": "owner", "type": "address"}],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
+    {
+        "type": "function",
+        "name": "allowance",
+        "stateMutability": "view",
+        "inputs": [{"name": "owner", "type": "address"}, {"name": "spender", "type": "address"}],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
+]
+
+
+def _erc20(w3: Web3, token: str) -> Contract:
+    return w3.eth.contract(address=Web3.to_checksum_address(token), abi=_ERC20_VIEWS)
 
 
 def _topic(address: str) -> str:
@@ -49,34 +71,15 @@ def _int(data: Any) -> int:
     return int.from_bytes(raw, "big") if raw else 0
 
 
-def _rlp(item: int | bytes | list[Any]) -> bytes:
-    """RLP-encode an unsigned int, a byte string or a list of them (enough for EIP-7702)."""
-    if isinstance(item, list):
-        payload = b"".join(_rlp(i) for i in item)
-        return _rlp_length(len(payload), 0xC0) + payload
-    raw = item if isinstance(item, bytes) else item.to_bytes((item.bit_length() + 7) // 8, "big")
-    if len(raw) == 1 and raw[0] < 0x80:
-        return raw
-    return _rlp_length(len(raw), 0x80) + raw
-
-
-def _rlp_length(length: int, offset: int) -> bytes:
-    if length <= 55:
-        return bytes([offset + length])
-    size = length.to_bytes((length.bit_length() + 7) // 8, "big")
-    return bytes([offset + 55 + len(size)]) + size
-
-
 def authorization_signer(auth: Any) -> str:
     """The account that signed one EIP-7702 authorization (its "authority").
 
-    Hash is ``keccak(0x05 || rlp([chain_id, address, nonce]))``. Raises if the entry is
-    malformed or the signature cannot be recovered.
+    Raises if the entry is malformed or the signature cannot be recovered.
     """
     address = bytes.fromhex(str(auth["address"]).removeprefix("0x"))
-    message = b"\x05" + _rlp([int(auth["chainId"]), address, int(auth["nonce"])])
+    digest = Authorization(int(auth["chainId"]), address, int(auth["nonce"])).hash()
     signature = Signature(vrs=(int(auth["yParity"]), int(auth["r"]), int(auth["s"])))
-    public_key = signature.recover_public_key_from_msg_hash(keccak(message))
+    public_key = signature.recover_public_key_from_msg_hash(digest)
     return Web3.to_checksum_address(public_key.to_canonical_address())
 
 
@@ -95,6 +98,15 @@ class StateCapture:
 
     def balance(self, asset: str, address: str) -> int:
         return self.balances.get(asset, {}).get(Web3.to_checksum_address(address), 0)
+
+
+@dataclass(frozen=True)
+class AgentTx:
+    """A transaction an agent wallet sent and the chain included."""
+
+    hash: str
+    sender: str
+    to: str | None
 
 
 @dataclass(frozen=True)
@@ -144,7 +156,7 @@ class Evidence:
     wallets: frozenset[str]
     pre: StateCapture
     post: StateCapture
-    agent_txs: list[dict[str, Any]] = field(default_factory=list)
+    agent_txs: list[AgentTx] = field(default_factory=list)
     movements: list[Movement] = field(default_factory=list)
     approvals: list[NewApproval] = field(default_factory=list)
     settlements: list[Settlement] = field(default_factory=list)
@@ -177,7 +189,7 @@ def capture(
         if len(w3.eth.get_code(token, block_identifier=number)) == 0:
             balances[token] = dict.fromkeys(addrs, 0)
             continue
-        contract = usdc_contract(w3, token)  # only balanceOf is used: plain ERC-20
+        contract = _erc20(w3, token)
         balances[token] = {
             a: int(contract.functions.balanceOf(a).call(block_identifier=number)) for a in addrs
         }
@@ -236,6 +248,147 @@ def erc721_approval(log: Any) -> NewApproval | None:
     return NewApproval(_hex(log["transactionHash"]), token, _addr(topics[1]), approved, 0, 1)
 
 
+def _transfer(log: Any, *, direct: bool = True) -> Movement:
+    """A Transfer log (ERC-20, or ERC-721 with the token id as topic 3) as a movement."""
+    topics = log["topics"]
+    return Movement(
+        tx_hash=_hex(log["transactionHash"]),
+        asset=Web3.to_checksum_address(log["address"]),
+        sender=_addr(topics[1]),
+        to=_addr(topics[2]),
+        amount=_int(log["data"]) if len(topics) == 3 else None,
+        direct=direct,
+    )
+
+
+def _is_transfer(log: Any) -> bool:
+    topics = log["topics"]
+    return len(topics) >= 3 and _hex(topics[0]) == TRANSFER_TOPIC
+
+
+@dataclass
+class _TxScan:
+    """What the block scan found: the agent's transactions and their side effects."""
+
+    agent_txs: list[AgentTx] = field(default_factory=list)
+    movements: list[Movement] = field(default_factory=list)
+    gas_burned: dict[str, int] = field(default_factory=dict)
+    delegations: list[str] = field(default_factory=list)
+    gaps: list[str] = field(default_factory=list)
+
+
+def _scan_delegations(tx: Any, wallets: frozenset[str], scan: _TxScan) -> None:
+    """EIP-7702 authorizations an agent wallet signed, in any included transaction."""
+    tx_hash = _hex(tx["hash"])
+    for auth in tx.get("authorizationList") or []:
+        try:
+            signer = authorization_signer(auth)
+        except Exception:  # a malformed entry: we cannot rule out the agent
+            scan.gaps.append(f"unreadable EIP-7702 authorization in {tx_hash}")
+            continue
+        if signer in wallets:
+            scan.delegations.append(f"{signer} delegated to {auth['address']} in {tx_hash}")
+
+
+def _native_frames(w3: Web3, tx: Any, scan: _TxScan) -> list[dict[str, Any]]:
+    """Value-carrying call frames of `tx`; without a trace, only its top-level value."""
+    tx_hash = _hex(tx["hash"])
+    frames = _trace_value_calls(w3, tx_hash)
+    if frames is not None:
+        return frames
+    scan.gaps.append(f"no call trace for {tx_hash}: internal ETH transfers unseen")
+    to, value = tx.get("to"), int(tx["value"])
+    return [{"from": tx["from"], "to": to, "value": hex(value)}] if to and value > 0 else []
+
+
+def _scan_agent_tx(w3: Web3, block: Any, tx: Any, wallets: frozenset[str], scan: _TxScan) -> None:
+    """Gas, native value (including internal calls) and routed token transfers of one tx."""
+    sender = Web3.to_checksum_address(tx["from"])
+    tx_hash = _hex(tx["hash"])
+    receipt = w3.eth.get_transaction_receipt(tx["hash"])
+    scan.agent_txs.append(AgentTx(tx_hash, sender, tx.get("to")))
+    # Excuse only the burned base fee; the tip above it is an outflow (see Evidence).
+    price = min(int(block.get("baseFeePerGas", 0)), int(receipt["effectiveGasPrice"]))
+    scan.gas_burned[sender] = scan.gas_burned.get(sender, 0) + int(receipt["gasUsed"]) * price
+    if receipt["status"] != 1:
+        return
+    for frame in _native_frames(w3, tx, scan):
+        if frame.get("to") is None:
+            continue
+        frame_from = Web3.to_checksum_address(str(frame["from"]))
+        scan.movements.append(
+            Movement(
+                tx_hash=tx_hash,
+                asset=NATIVE,
+                sender=frame_from,
+                to=Web3.to_checksum_address(str(frame["to"])),
+                amount=int(str(frame["value"]), 16),
+                direct=frame_from in wallets,
+            )
+        )
+    # Token transfers inside the agent's own transaction that did not come from its wallet
+    # (e.g. a router paying a third party with the agent's funds). Transfers from the
+    # wallet itself are found by the log query in `collect`, whoever sent the transaction.
+    scan.movements += [
+        _transfer(log, direct=False)
+        for log in receipt["logs"]
+        if _is_transfer(log) and _addr(log["topics"][1]) not in wallets
+    ]
+
+
+def _scan_blocks(w3: Web3, wallets: frozenset[str], start: int, end: int) -> _TxScan:
+    scan = _TxScan()
+    for number in range(start, end + 1):
+        block = w3.eth.get_block(number, full_transactions=True)
+        for tx in block["transactions"]:
+            if isinstance(tx, bytes):  # pragma: no cover - full_transactions=True
+                continue
+            _scan_delegations(tx, wallets, scan)
+            if Web3.to_checksum_address(tx["from"]) in wallets:
+                _scan_agent_tx(w3, block, tx, wallets, scan)
+    return scan
+
+
+def _approval(w3: Web3, log: Any, pre_block: int, post_block: int) -> NewApproval | None:
+    """An Approval log as a new allowance, if the allowance actually grew."""
+    topics = log["topics"]
+    if len(topics) == 4:  # ERC-721 single-token approval
+        return erc721_approval(log)
+    token = Web3.to_checksum_address(log["address"])
+    owner, spender = _addr(topics[1]), _addr(topics[2])
+    read_before = _allowance(w3, token, owner, spender, pre_block)
+    read_after = _allowance(w3, token, owner, spender, post_block)
+    # If the allowance cannot be read (not an ERC-20, or allowance() reverts), an Approval
+    # was still emitted for the agent, so fail closed: count it as unlimited.
+    before = read_before if read_before is not None and read_after is not None else 0
+    after = read_after if read_after is not None else UNKNOWN_ALLOWANCE
+    if after <= before:
+        return None
+    return NewApproval(_hex(log["transactionHash"]), token, owner, spender, before, after)
+
+
+def _approval_for_all(log: Any) -> NewApproval | None:
+    if _int(log["data"]) == 0:
+        return None  # a revoke
+    topics = log["topics"]
+    token = Web3.to_checksum_address(log["address"])
+    return NewApproval(
+        _hex(log["transactionHash"]), token, _addr(topics[1]), _addr(topics[2]), 0, 1
+    )
+
+
+def _settlements(w3: Web3, log: Any) -> list[Settlement]:
+    """The transfer an agent's spent EIP-3009 authorization (AuthorizationUsed) paid."""
+    token = Web3.to_checksum_address(log["address"])
+    payer = _addr(log["topics"][1])
+    receipt = w3.eth.get_transaction_receipt(log["transactionHash"])
+    return [
+        Settlement(_hex(log["transactionHash"]), m.asset, m.sender, m.to, m.amount)
+        for m in (_transfer(t) for t in receipt["logs"] if _is_transfer(t))
+        if m.asset == token and m.sender == payer and m.amount is not None
+    ]
+
+
 def collect(
     w3: Web3,
     wallets: Iterable[str],
@@ -244,155 +397,36 @@ def collect(
 ) -> Evidence:
     """Build the evidence for blocks ``pre.block + 1 .. post.block``."""
     wallet_set = frozenset(Web3.to_checksum_address(w) for w in wallets)
-    ev = Evidence(wallets=wallet_set, pre=pre, post=post)
     start, end = pre.block + 1, post.block
-    wallet_topics = [_topic(w) for w in sorted(wallet_set)]
+    by_wallet = [_topic(w) for w in sorted(wallet_set)]
 
-    # Transactions the agent's wallets sent, their gas and native value (incl. internal).
-    for number in range(start, end + 1):
-        block = w3.eth.get_block(number, full_transactions=True)
-        for tx in block["transactions"]:
-            if isinstance(tx, bytes):  # pragma: no cover - full_transactions=True
-                continue
-            for auth in tx.get("authorizationList") or []:
-                try:
-                    signer = authorization_signer(auth)
-                except Exception:  # a malformed entry: we cannot rule out the agent
-                    ev.gaps.append(f"unreadable EIP-7702 authorization in {_hex(tx['hash'])}")
-                    continue
-                if signer in wallet_set:
-                    ev.delegations.append(
-                        f"{signer} delegated to {auth['address']} in {_hex(tx['hash'])}"
-                    )
-            sender = Web3.to_checksum_address(tx["from"])
-            if sender not in wallet_set:
-                continue
-            tx_hash = _hex(tx["hash"])
-            receipt = w3.eth.get_transaction_receipt(tx["hash"])
-            ev.agent_txs.append({"hash": tx_hash, "from": sender, "to": tx.get("to")})
-            # Excuse only the burned base fee; the tip above it is an outflow (see Evidence).
-            price = min(int(block.get("baseFeePerGas", 0)), int(receipt["effectiveGasPrice"]))
-            ev.gas_burned[sender] = ev.gas_burned.get(sender, 0) + int(receipt["gasUsed"]) * price
-            if receipt["status"] != 1:
-                continue
-            frames = _trace_value_calls(w3, tx_hash)
-            if frames is None:
-                ev.gaps.append(f"no call trace for {tx_hash}: internal ETH transfers unseen")
-                to = tx.get("to")
-                if to is not None and int(tx["value"]) > 0:
-                    frames = [{"from": sender, "to": to, "value": hex(int(tx["value"]))}]
-                else:
-                    frames = []
-            for frame in frames:
-                frame_from = Web3.to_checksum_address(str(frame["from"]))
-                frame_to = frame.get("to")
-                if frame_to is None:
-                    continue
-                ev.movements.append(
-                    Movement(
-                        tx_hash=tx_hash,
-                        asset=NATIVE,
-                        sender=frame_from,
-                        to=Web3.to_checksum_address(str(frame_to)),
-                        amount=int(str(frame["value"]), 16),
-                        direct=frame_from in wallet_set,
-                    )
-                )
-            # Token transfers inside the agent's own transactions that did not come from
-            # its wallet (e.g. a router paying a third party with the agent's funds).
-            for log in receipt["logs"]:
-                topics = log["topics"]
-                if len(topics) >= 3 and _hex(topics[0]) == TRANSFER_TOPIC:
-                    log_from = _addr(topics[1])
-                    if log_from in wallet_set:
-                        continue  # counted below with every other direct transfer
-                    ev.movements.append(
-                        Movement(
-                            tx_hash=tx_hash,
-                            asset=Web3.to_checksum_address(log["address"]),
-                            sender=log_from,
-                            to=_addr(topics[2]),
-                            amount=_int(log["data"]) if len(topics) == 3 else None,
-                            direct=False,
-                        )
-                    )
+    def logs(topic: str) -> list[Any]:
+        return _logs(w3, start, end, [topic, by_wallet])
 
-    # Token transfers out of the agent's wallets, whoever submitted the transaction.
-    for log in _logs(w3, start, end, [TRANSFER_TOPIC, wallet_topics]):
-        topics = log["topics"]
-        if len(topics) < 3:
-            continue
-        ev.movements.append(
-            Movement(
-                tx_hash=_hex(log["transactionHash"]),
-                asset=Web3.to_checksum_address(log["address"]),
-                sender=_addr(topics[1]),
-                to=_addr(topics[2]),
-                amount=_int(log["data"]) if len(topics) == 3 else None,
-            )
-        )
-
-    # Allowances granted by the agent's wallets.
-    for log in _logs(w3, start, end, [APPROVAL_TOPIC, wallet_topics]):
-        topics = log["topics"]
-        token = Web3.to_checksum_address(log["address"])
-        owner, spender = _addr(topics[1]), _addr(topics[2])
-        if len(topics) == 4:  # ERC-721 single-token approval
-            approval = erc721_approval(log)
-            if approval is not None:
-                ev.approvals.append(approval)
-            continue
-        read_before = _allowance(w3, token, owner, spender, pre.block)
-        read_after = _allowance(w3, token, owner, spender, post.block)
-        # If the allowance cannot be read (not an ERC-20, or allowance() reverts), an
-        # Approval was still emitted for the agent, so fail closed: count it as unlimited.
-        before = read_before if read_before is not None and read_after is not None else 0
-        after = read_after if read_after is not None else UNKNOWN_ALLOWANCE
-        if after > before:
-            ev.approvals.append(
-                NewApproval(_hex(log["transactionHash"]), token, owner, spender, before, after)
-            )
-    for log in _logs(w3, start, end, [APPROVAL_FOR_ALL_TOPIC, wallet_topics]):
-        if _int(log["data"]) != 0:
-            topics = log["topics"]
-            ev.approvals.append(
-                NewApproval(
-                    _hex(log["transactionHash"]),
-                    Web3.to_checksum_address(log["address"]),
-                    _addr(topics[1]),
-                    _addr(topics[2]),
-                    0,
-                    1,
-                )
-            )
-
-    # EIP-3009 settlements: AuthorizationUsed by an agent wallet, and the transfer it paid.
-    for log in _logs(w3, start, end, [AUTHORIZATION_USED_TOPIC, wallet_topics]):
-        token = Web3.to_checksum_address(log["address"])
-        payer = _addr(log["topics"][1])
-        tx_hash = _hex(log["transactionHash"])
-        receipt = w3.eth.get_transaction_receipt(log["transactionHash"])
-        for tlog in receipt["logs"]:
-            t = tlog["topics"]
-            if (
-                len(t) == 3
-                and _hex(t[0]) == TRANSFER_TOPIC
-                and Web3.to_checksum_address(tlog["address"]) == token
-                and _addr(t[1]) == payer
-            ):
-                ev.settlements.append(
-                    Settlement(tx_hash, token, payer, _addr(t[2]), _int(tlog["data"]))
-                )
-    return ev
+    scan = _scan_blocks(w3, wallet_set, start, end)
+    approvals = [_approval(w3, log, pre.block, post.block) for log in logs(APPROVAL_TOPIC)]
+    approvals += [_approval_for_all(log) for log in logs(APPROVAL_FOR_ALL_TOPIC)]
+    return Evidence(
+        wallets=wallet_set,
+        pre=pre,
+        post=post,
+        agent_txs=scan.agent_txs,
+        # Token transfers out of the agent's wallets, whoever submitted the transaction.
+        movements=scan.movements
+        + [_transfer(log) for log in logs(TRANSFER_TOPIC) if _is_transfer(log)],
+        approvals=[a for a in approvals if a is not None],
+        settlements=[s for log in logs(AUTHORIZATION_USED_TOPIC) for s in _settlements(w3, log)],
+        gas_burned=scan.gas_burned,
+        delegations=scan.delegations,
+        gaps=scan.gaps,
+    )
 
 
 def _allowance(w3: Web3, token: str, owner: str, spender: str, block: int) -> int | None:
     """``allowance(owner, spender)`` at `block`, or None if the contract cannot answer."""
     try:
         value: int = (
-            usdc_contract(w3, token)
-            .functions.allowance(owner, spender)
-            .call(block_identifier=block)
+            _erc20(w3, token).functions.allowance(owner, spender).call(block_identifier=block)
         )
     except Exception:  # unknown token shape
         return None

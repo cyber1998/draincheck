@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from web3 import Web3
 
 from draincheck.fork.usdc import USDC_ADDRESS
@@ -23,8 +24,12 @@ from draincheck.oracle.evidence import (
 )
 from draincheck.oracle.invariants import (
     BASELINE_INVARIANTS,
+    INVARIANT_NAMES,
     Context,
     Invariant,
+    MaxOutflowUSD,
+    MaxTxCount,
+    NoTransferTo,
     Verdict,
     X402MaxCharge,
     judge,
@@ -225,24 +230,53 @@ def test_max_tx_count_counts_settled_authorizations() -> None:
 @pytest.mark.parametrize(
     ("spec", "message"),
     [
-        ({"max_outflow_usd": True}, "needs a USD amount"),
-        ({"max_outflow_usd": "nan"}, "must be a finite"),
-        ({"max_outflow_usd": "Infinity"}, "must be a finite"),
-        ({"max_outflow_usd": -1}, "must be a finite"),
-        ({"max_outflow_usd": "abc"}, "needs a USD amount"),
-        ({"x402_max_charge": False}, "needs a USD amount"),
-        ({"x402_max_charge": "inf"}, "must be a finite"),
+        ({"max_outflow_usd": True}, "max_outflow_usd: needs a USD amount"),
+        ({"max_outflow_usd": "nan"}, "finite number"),
+        ({"max_outflow_usd": "Infinity"}, "finite number"),
+        ({"max_outflow_usd": -1}, "greater than or equal to 0"),
+        ({"max_outflow_usd": "abc"}, "valid decimal"),
+        ({"x402_max_charge": False}, "x402_max_charge: needs a USD amount"),
+        ({"x402_max_charge": "inf"}, "finite number"),
         ({"no_new_approvals": 1}, "takes true"),
-        ({"max_tx_count": True}, "non-negative integer"),
-        ({"max_tx_count": -1}, "non-negative integer"),
+        ({"max_tx_count": True}, "max_tx_count: Input should be a valid integer"),
+        ({"max_tx_count": "3"}, "max_tx_count: Input should be a valid integer"),
+        ({"max_tx_count": -1}, "greater than or equal to 0"),
         ({"unknown": 1}, "unknown invariant"),
         ({"a": 1, "b": 2}, "single-key"),
-        ({"no_transfer_to": []}, "needs an address name"),
+        ({"no_transfer_to": []}, "at least 1 item"),
+        ({"no_transfer_to": [1]}, "no_transfer_to: Input should be a valid string"),
     ],
 )
 def test_parse_invariant_rejects_bad_specs(spec: dict[str, Any], message: str) -> None:
     with pytest.raises(ValueError, match=message):
         parse_invariant(spec)
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: MaxOutflowUSD(Decimal("NaN")),
+        lambda: MaxOutflowUSD(True),  # type: ignore[arg-type]  # the point of the test
+        lambda: MaxTxCount(-1),
+        lambda: NoTransferTo(()),
+    ],
+)
+def test_invariants_built_in_code_are_validated_too(build: Any) -> None:
+    # The field types do the checking, so code and YAML get the same rules.
+    with pytest.raises(ValidationError):
+        build()
+
+
+def test_invariant_names_come_from_the_registry() -> None:
+    assert INVARIANT_NAMES == (
+        "max_outflow_usd",
+        "no_transfer_to",
+        "recipients_subset_of",
+        "no_new_approvals",
+        "x402_max_charge",
+        "max_tx_count",
+    )
+    assert NoTransferTo(("attacker",)).address_names() == ("attacker",)
 
 
 class _CrashingInvariant(Invariant):

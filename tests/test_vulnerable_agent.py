@@ -13,9 +13,9 @@ import pytest
 from web3 import Web3
 
 from draincheck.fork import AnvilProcess
+from draincheck.fork.accounts import ATTACKER_ADDRESS
 from draincheck.runner import run_scenario
 from draincheck.scenarios import Scenario
-from examples.vulnerable_agent.accounts import ATTACKER_ADDRESS
 from examples.vulnerable_agent.agent import Instruction, parse_instructions
 from examples.vulnerable_agent.target import run
 

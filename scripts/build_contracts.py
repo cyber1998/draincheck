@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = ROOT / "contracts"
 PACKAGE = ROOT / "src" / "draincheck" / "contracts"
-NAMES = ("TestUSDC", "MiniPermit2", "X402UptoProxy")
+NAMES = ("TestUSDC",)
 
 
 def build() -> dict[str, str]:

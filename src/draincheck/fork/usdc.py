@@ -22,7 +22,6 @@ from web3 import Web3
 from web3.contract import Contract
 
 from draincheck.contracts import load_artifact
-from draincheck.safety import assert_local_rpc
 
 # Native USDC on Base (Circle). The local stand-in is installed at the same address.
 USDC_ADDRESS = Web3.to_checksum_address("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
@@ -47,6 +46,9 @@ class LocalNode(Protocol):
 
     @property
     def is_fork(self) -> bool: ...
+
+    @property
+    def w3(self) -> Web3: ...
 
     def rpc(self, method: str, params: list[Any] | None = None) -> Any: ...
 
@@ -80,17 +82,13 @@ def from_units(units: int) -> Decimal:
     return Decimal(units) / Decimal(USDC_UNIT)
 
 
-def _w3(node: LocalNode) -> Web3:
-    return Web3(Web3.HTTPProvider(assert_local_rpc(node.rpc_url)))
-
-
 def ensure_usdc(node: LocalNode) -> str:
     """Make sure USDC exists on `node` and return its address.
 
     On a fork the real contract must already be there. On a local chain TestUSDC's runtime
     code is installed with ``anvil_setCode`` if the address is empty.
     """
-    w3 = _w3(node)
+    w3 = node.w3
     if len(w3.eth.get_code(USDC_ADDRESS)) > 0:
         return USDC_ADDRESS
     if node.is_fork:
@@ -118,7 +116,7 @@ def _word(value: int) -> str:
 def usdc_balance(node: LocalNode, holder: str, token: str = USDC_ADDRESS) -> int:
     """USDC balance of `holder` in base units."""
     units: int = (
-        usdc_contract(_w3(node), token).functions.balanceOf(Web3.to_checksum_address(holder)).call()
+        usdc_contract(node.w3, token).functions.balanceOf(Web3.to_checksum_address(holder)).call()
     )
     return units
 

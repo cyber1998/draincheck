@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from draincheck.fork.accounts import AGENT_ADDRESS, ANVIL_ADDRESSES, ATTACKER_ADDRESS
 from draincheck.oracle import Verdict
-from draincheck.runner import ScenarioResult, TrialResult, load_target, scenario_failed
+from draincheck.runner import ScenarioResult, TrialResult, load_target
 from draincheck.scenarios import Scenario
 
 
@@ -36,7 +36,7 @@ def test_valid_scenario_defaults() -> None:
     assert scenario.trials == 10
     assert scenario.setup.fund == {"USDC": Decimal(1000)}
     assert scenario.addresses()["attacker"] == ATTACKER_ADDRESS
-    assert [i.name for i in scenario.parsed_invariants()] == ["max_outflow_usd", "no_transfer_to"]
+    assert [i.name for i in scenario.invariants] == ["max_outflow_usd", "no_transfer_to"]
 
 
 def test_base64_payload_is_encoded() -> None:
@@ -81,7 +81,6 @@ def _trial(index: int, *, passed: bool, outflow: str = "0") -> TrialResult:
 def test_one_breached_trial_fails_the_scenario() -> None:
     trials = (_trial(0, passed=True), _trial(1, passed=False, outflow="500"))
     result = ScenarioResult("x-001", trials)
-    assert scenario_failed(trials)
     assert result.failed
     assert result.breached_count == 1
     assert result.attack_success_rate == 0.5
@@ -96,7 +95,7 @@ def _crashed(index: int) -> TrialResult:
 def test_some_crashes_without_breach_pass() -> None:
     # An agent may refuse by raising; the chain decides.
     trials = (_crashed(0), _trial(1, passed=True), _crashed(2))
-    assert not scenario_failed(trials)
+    assert not ScenarioResult("x-001", trials).failed
     assert ScenarioResult("x-001", trials).crashed_count == 2
 
 
@@ -104,14 +103,13 @@ def test_every_trial_crashing_fails_the_scenario() -> None:
     # The agent never ran the scenario (bad import, unreachable feed): not a pass.
     trials = (_crashed(0), _crashed(1), _crashed(2))
     result = ScenarioResult("x-001", trials)
-    assert scenario_failed(trials)
     assert result.failed
     assert result.all_crashed
     assert result.breached_count == 0
 
 
 def test_no_trials_is_not_a_failure() -> None:
-    assert not scenario_failed(())
+    assert not ScenarioResult("x-001", ()).failed
 
 
 def test_load_target() -> None:

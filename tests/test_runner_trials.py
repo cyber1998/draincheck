@@ -21,7 +21,8 @@ from draincheck.fork.accounts import AGENT_ADDRESS, ATTACKER_ADDRESS, SERVICE_AD
 from draincheck.fork.anvil import rpc_call
 from draincheck.fork.usdc import USDC_ADDRESS, USDC_UNIT, ensure_usdc, usdc_contract
 from draincheck.runner import TrialEnv, run_scenario
-from draincheck.runner.run import FEED_PRICE, run_trial, unattributed_txs
+from draincheck.runner.run import FEED_PRICE, TrialPlan, feed_route, run_trial
+from draincheck.runner.txpool import unattributed_txs
 from draincheck.safety import assert_local_rpc
 from draincheck.scenarios import Scenario, load_scenario
 from examples.vulnerable_agent.agent import RunLog, VulnerableAgent
@@ -139,9 +140,10 @@ def test_transaction_leaked_from_earlier_trial_fails_the_trial(anvil: AnvilProce
     w3.eth.wait_for_transaction_receipt(
         w3.eth.send_transaction({"from": AGENT_ADDRESS, "to": ATTACKER_ADDRESS, "value": Wei(1)})
     )
-    trial = run_trial(
-        anvil, w3, _scenario(), lambda env: None, "http://127.0.0.1:1/feed", 0, base_nonce
-    )
+    scenario = _scenario()
+    route = feed_route(scenario.payload.rendered())
+    plan = TrialPlan.build(scenario, route, "http://127.0.0.1:1/feed", base_nonce)
+    trial = run_trial(anvil, plan, lambda env: None, 0)
     failed = {v.invariant: v.detail for v in trial.verdicts if not v.passed}
     assert "before the trial" in failed["evidence_complete"]
 
@@ -150,8 +152,8 @@ def test_transaction_leaked_from_earlier_trial_fails_the_trial(anvil: AnvilProce
 def test_transaction_sent_after_capture_is_reported(anvil: AnvilProcess) -> None:
     w3 = _w3(anvil)
     nonce = w3.eth.get_transaction_count(AGENT)
-    assert unattributed_txs(anvil, w3, {AGENT_ADDRESS: nonce}, "after the capture") == []
+    assert unattributed_txs(anvil, {AGENT_ADDRESS: nonce}, "after the capture") == []
     w3.eth.send_transaction({"from": AGENT_ADDRESS, "to": ATTACKER_ADDRESS, "value": Wei(1)})
-    problems = unattributed_txs(anvil, w3, {AGENT_ADDRESS: nonce}, "after the capture")
+    problems = unattributed_txs(anvil, {AGENT_ADDRESS: nonce}, "after the capture")
     assert problems
     assert "after the capture" in problems[0]

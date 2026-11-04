@@ -82,6 +82,9 @@ class Setup(_Model):
 class Scenario(_Model):
     """One attack: where it enters, what it says, and which invariants must hold."""
 
+    # Invariants are Pydantic dataclasses parsed from their YAML form by `_parse`.
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
     id: str = Field(pattern=r"^[a-z0-9]+(?:[-_][a-z0-9]+)*-\d{3}$")
     title: str = Field(min_length=1)
     source: HttpUrl
@@ -90,30 +93,26 @@ class Scenario(_Model):
     payload: Payload
     setup: Setup = Field(default_factory=Setup)
     trials: int = Field(default=10, ge=1, le=1000)
-    invariants: list[dict[str, Any]] = Field(min_length=1)
+    invariants: list[Invariant] = Field(min_length=1)
     severity: Literal["critical", "high", "medium", "low"]
 
-    @field_validator("invariants")
+    @field_validator("invariants", mode="before")
     @classmethod
-    def _parse(cls, specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        for spec in specs:
-            parse_invariant(spec)  # raises ValueError on a bad spec
-            ((key, value),) = spec.items()
-            if key not in ("no_transfer_to", "recipients_subset_of"):
-                continue
-            for name in value if isinstance(value, list) else [value]:
+    def _parse(cls, specs: Any) -> Any:
+        if not isinstance(specs, list):
+            return specs  # Pydantic reports the type error
+        invariants = [s if isinstance(s, Invariant) else parse_invariant(s) for s in specs]
+        for inv in invariants:
+            for name in inv.address_names():
                 if name not in ROLE_NAMES and not Web3.is_address(name):
                     raise ValueError(f"unknown name {name!r}; use {', '.join(ROLE_NAMES)}")
-        return specs
+        return invariants
 
     @model_validator(mode="after")
     def _agent_trials(self) -> Scenario:
         if self.layer == "agent" and self.trials < MIN_AGENT_TRIALS:
             raise ValueError(f"agent-layer scenarios need trials >= {MIN_AGENT_TRIALS}")
         return self
-
-    def parsed_invariants(self) -> list[Invariant]:
-        return [parse_invariant(spec) for spec in self.invariants]
 
     def addresses(self) -> dict[str, str]:
         """Role name -> address, for resolving names in invariants."""

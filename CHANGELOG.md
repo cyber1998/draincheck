@@ -25,12 +25,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `AnvilProcess.snapshot()`, `revert()` and `isolated()` (EVM snapshot and revert).
 - `fork` pytest marker for tests that need real Base state; they skip when
   `DRAINCHECK_FORK_URL` is unset, as in CI.
-- Sandbox contracts in `contracts/`: TestUSDC (USDC's EIP-712 domain, EIP-2612, EIP-3009)
-  and minimal Permit2 / x402 `upto` stand-ins, with `scripts/build_contracts.py` to rebuild
-  the bundled ABI and bytecode. CI fails if the bundled artifacts are out of date.
+- Sandbox contract in `contracts/`: TestUSDC (USDC's EIP-712 domain, EIP-2612, EIP-3009),
+  with `scripts/build_contracts.py` to rebuild the bundled ABI and bytecode. CI fails if
+  the bundled artifacts are out of date.
 - Test-USDC funding (`fund_usdc`) on a local chain or a Base fork.
 - Mock x402 v2 facilitator (`/supported`, `/verify`, `/settle`, `exact` scheme) and fake
-  paid services that serve scenario content. `upto` settlement is not wired up yet.
+  paid services that serve scenario content. Only the `exact` scheme is supported; the
+  `upto` scheme comes later.
 - Oracle: evidence collection from chain state and the six v0.1 invariants
   (`max_outflow_usd`, `no_transfer_to`, `recipients_subset_of`, `no_new_approvals`,
   `x402_max_charge`, `max_tx_count`).
@@ -50,6 +51,23 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   injected USDC transfers. Its old tx-hash payment service is removed.
 - Tests marked `anvil` skip (or fail in CI) on a missing anvil even when they do not use
   the `anvil` fixture.
+- Invariants are validated Pydantic dataclasses, parsed once when the scenario loads
+  (`Scenario.invariants`), with the same rules whether built from YAML or in code. Error
+  messages for a bad invariant are worded differently.
+- The runner builds a `TrialPlan` once per scenario, and the quote the oracle checks is
+  taken from the paid route itself. Trial results and txpool checks have their own modules.
+  `scenario_failed` is replaced by `ScenarioResult.failed` and `failure_reason`, which
+  `draincheck run` prints.
+- `collect()` is split into one function per kind of evidence. The oracle reads tokens
+  through a minimal ERC-20 ABI, and EIP-7702 authorities are recovered with eth-account's
+  authorization hash instead of a hand-written RLP encoder.
+- `AnvilProcess.w3` gives one cached Web3 client per node. `AnvilProcess.fund_usdc` and
+  `examples/vulnerable_agent/accounts.py` are removed.
+
+### Removed
+
+- The unused Permit2 / x402 `upto` stand-ins (`MiniPermit2`, `X402UptoProxy`) and their
+  Python signing code. They will return with `upto` settlement.
 
 ### Fixed
 

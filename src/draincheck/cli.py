@@ -82,9 +82,8 @@ def run(
         f"{status} {spec.id}: {result.breached_count}/{total} trials breached "
         f"({result.attack_success_rate:.0%}); max outflow ${result.max_outflow_usd:.2f}"
     )
-    if result.all_crashed and not result.breached_count:
-        typer.echo(f"  the agent raised in all {total} trials, so the scenario was never tested")
-    if result.failed:
+    if result.failure_reason is not None:
+        typer.echo(f"  {result.failure_reason}")
         raise typer.Exit(code=1)
 
 

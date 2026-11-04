@@ -19,12 +19,12 @@ import subprocess
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from decimal import Decimal
 from types import TracebackType
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
+from web3 import Web3
 
 from draincheck.safety import assert_local_rpc
 
@@ -127,6 +127,7 @@ class AnvilProcess:
             startup_timeout = 60.0 if self._fork_url else 15.0
         self.startup_timeout = startup_timeout
         self._proc: subprocess.Popen[bytes] | None = None
+        self._w3: Web3 | None = None
 
     @property
     def is_fork(self) -> bool:
@@ -208,13 +209,15 @@ class AnvilProcess:
         finally:
             self.revert(snapshot_id)
 
-    def fund_usdc(self, holder: str, amount: Decimal | int | str) -> int:
-        """Give `holder` exactly `amount` test USDC; see :func:`draincheck.fork.usdc.fund_usdc`."""
-        from draincheck.fork.usdc import fund_usdc
-
-        return fund_usdc(self, holder, amount)
+    @property
+    def w3(self) -> Web3:
+        """A Web3 client for this node, created once. Local only."""
+        if self._w3 is None:
+            self._w3 = Web3(Web3.HTTPProvider(assert_local_rpc(self.rpc_url)))
+        return self._w3
 
     def stop(self) -> None:
+        self._w3 = None
         if self._proc is None:
             return
         self._proc.terminate()

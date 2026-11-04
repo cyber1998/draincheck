@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Draincheck Authors
-"""The Python signing paths hash exactly what the Solidity contracts (and real USDC /
-Permit2) hash. Each test rebuilds the EIP-712 digest with the contracts' formula."""
+"""The Python EIP-3009 signing path hashes exactly what TestUSDC and real USDC hash.
+Each test rebuilds the EIP-712 digest with the contracts' formula."""
 
 from __future__ import annotations
 
@@ -17,15 +17,6 @@ from draincheck.facilitator.eip3009 import (
     recover_signer,
     sign_authorization,
 )
-from draincheck.facilitator.permit2 import (
-    PERMIT_WITNESS_TYPES,
-    WITNESS_TYPE_STRING,
-    UptoAuthorization,
-    permit2_domain,
-    recover_upto_signer,
-    sign_upto,
-)
-from draincheck.fork.permit2 import PERMIT2_ADDRESS, UPTO_PROXY_ADDRESS
 from draincheck.fork.usdc import USDC_ADDRESS
 
 # Anvil dev account 0.
@@ -73,68 +64,3 @@ def test_eip3009_digest_matches_usdc_formula() -> None:
     )
     assert _hash_eip191_message(message) == _digest(domain_sep, struct_hash)
     assert recover_signer(auth, sign_authorization(KEY, auth)) == PAYER
-
-
-def test_permit2_witness_digest_matches_permit2_formula() -> None:
-    auth = UptoAuthorization(
-        token=USDC_ADDRESS,
-        max_amount=5_000_000,
-        from_=PAYER,
-        nonce=12345,
-        deadline=2**40,
-        to=PAY_TO,
-        facilitator=FACILITATOR,
-        valid_after=0,
-    )
-    # Permit2's domain has no version.
-    domain_sep = keccak(
-        encode(
-            ["bytes32", "bytes32", "uint256", "address"],
-            [
-                keccak(text="EIP712Domain(string name,uint256 chainId,address verifyingContract)"),
-                keccak(text="Permit2"),
-                31337,
-                PERMIT2_ADDRESS,
-            ],
-        )
-    )
-    # Permit2: keccak(stub ++ witnessTypeString), with the proxy's witness type string.
-    typehash = keccak(
-        text="PermitWitnessTransferFrom(TokenPermissions permitted,address spender,"
-        "uint256 nonce,uint256 deadline," + WITNESS_TYPE_STRING
-    )
-    permissions = keccak(
-        encode(
-            ["bytes32", "address", "uint256"],
-            [
-                keccak(text="TokenPermissions(address token,uint256 amount)"),
-                USDC_ADDRESS,
-                5_000_000,
-            ],
-        )
-    )
-    witness = keccak(
-        encode(
-            ["bytes32", "address", "address", "uint256"],
-            [
-                keccak(text="Witness(address to,address facilitator,uint256 validAfter)"),
-                PAY_TO,
-                FACILITATOR,
-                0,
-            ],
-        )
-    )
-    struct_hash = keccak(
-        encode(
-            ["bytes32", "bytes32", "address", "uint256", "uint256", "bytes32"],
-            [typehash, permissions, UPTO_PROXY_ADDRESS, 12345, 2**40, witness],
-        )
-    )
-    message = encode_typed_data(
-        domain_data=permit2_domain(),
-        message_types=PERMIT_WITNESS_TYPES,
-        message_data=auth.message(),
-    )
-    assert _hash_eip191_message(message) == _digest(domain_sep, struct_hash)
-    assert recover_upto_signer(auth, sign_upto(KEY, auth)) == PAYER
-    assert UptoAuthorization.from_wire(auth.to_wire()) == auth
