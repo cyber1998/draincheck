@@ -18,3 +18,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Claude Code setup: `CLAUDE.md`, the `guard_rpc` safety hook, three review subagents and
   two scenario-writing skills.
 - CI workflow with anvil, CLA workflow, issue and pull request templates.
+
+### Fixed
+
+- `guard_rpc` hook no longer blocks commands that only mention "anvil" or "rpc" in prose
+  (for example a commit message with a link). It now treats a command as chain-related
+  only when it runs a Foundry tool, passes an RPC flag, sends an `eth_` method or builds
+  a web3 provider.
