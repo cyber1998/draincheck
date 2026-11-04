@@ -24,6 +24,8 @@ APPROVAL_FOR_ALL_TOPIC = "0x" + keccak(text="ApprovalForAll(address,address,bool
 AUTHORIZATION_USED_TOPIC = "0x" + keccak(text="AuthorizationUsed(address,bytes32)").hex()
 
 NATIVE = "native"
+# Recorded as `after` when an approved allowance cannot be read back.
+UNKNOWN_ALLOWANCE = 2**256 - 1
 
 
 def _topic(address: str) -> str:
@@ -282,8 +284,12 @@ def collect(
             if approval is not None:
                 ev.approvals.append(approval)
             continue
-        before = _allowance(w3, token, owner, spender, pre.block)
-        after = _allowance(w3, token, owner, spender, post.block)
+        read_before = _allowance(w3, token, owner, spender, pre.block)
+        read_after = _allowance(w3, token, owner, spender, post.block)
+        # If the allowance cannot be read (not an ERC-20, or allowance() reverts), an
+        # Approval was still emitted for the agent, so fail closed: count it as unlimited.
+        before = read_before if read_before is not None and read_after is not None else 0
+        after = read_after if read_after is not None else UNKNOWN_ALLOWANCE
         if after > before:
             ev.approvals.append(
                 NewApproval(_hex(log["transactionHash"]), token, owner, spender, before, after)
@@ -322,13 +328,14 @@ def collect(
     return ev
 
 
-def _allowance(w3: Web3, token: str, owner: str, spender: str, block: int) -> int:
+def _allowance(w3: Web3, token: str, owner: str, spender: str, block: int) -> int | None:
+    """``allowance(owner, spender)`` at `block`, or None if the contract cannot answer."""
     try:
         value: int = (
             usdc_contract(w3, token)
             .functions.allowance(owner, spender)
             .call(block_identifier=block)
         )
-    except Exception:  # unknown token shape: treat as fully new
-        return 0
+    except Exception:  # unknown token shape
+        return None
     return value

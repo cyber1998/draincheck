@@ -61,6 +61,13 @@ def run(
     from draincheck.runner import load_target, run_scenario
     from draincheck.scenarios import load_scenario
 
+    # A console script does not put the working directory on sys.path, so an agent in the
+    # user's project ("myproject.agent:run") would not import. Appended, not prepended, so
+    # a stray module in the working directory cannot shadow an installed package.
+    cwd = str(Path.cwd())
+    if cwd not in sys.path:
+        sys.path.append(cwd)
+
     spec = load_scenario(scenario)
     result = run_scenario(spec, load_target(agent), fork=fork)
     total = len(result.trials)

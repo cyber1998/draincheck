@@ -4,6 +4,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from decimal import Decimal
 from pathlib import Path
 
@@ -27,7 +30,7 @@ SCENARIO = (
 def test_scenario_file_is_valid() -> None:
     scenario = load_scenario(SCENARIO)
     assert scenario.trials == 10
-    assert len(scenario.parsed_invariants()) == 4
+    assert len(scenario.parsed_invariants()) == 5
 
 
 @pytest.mark.anvil
@@ -47,3 +50,22 @@ def test_cli_run_exits_1_with_dollar_figure() -> None:
     assert result.exit_code == 1, result.output
     assert "FAIL social-post-usdc-transfer-001: 10/10 trials breached" in result.output
     assert "max outflow $500.01" in result.output
+
+
+@pytest.mark.anvil
+def test_installed_cli_imports_agent_from_working_directory() -> None:
+    # The console script, not CliRunner: pytest already puts the repo root on sys.path,
+    # which hid that `draincheck run --agent examples...` could not import the agent.
+    exe = Path(sys.executable).parent / "draincheck"
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    proc = subprocess.run(
+        [str(exe), "run", str(SCENARIO), "--agent", "examples.vulnerable_agent.target:run"],
+        cwd=SCENARIO.parents[2],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "FAIL social-post-usdc-transfer-001" in proc.stdout

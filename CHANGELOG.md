@@ -57,6 +57,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   means a $1 cap. Booleans, NaN and infinite caps are rejected.
 - ERC-721 approvals were detected from the token id instead of the approved address, so
   approving token 0 was missed and revoking any other token counted as an approval.
+- An Approval from a contract whose `allowance()` cannot be read was dropped (both reads
+  returned 0). It is now recorded as an unlimited allowance, so `no_new_approvals` fails.
+- `social-post-usdc-transfer-001` also checks `no_new_approvals`, so an agent that
+  approves the attacker instead of paying them fails it.
+- `draincheck run --agent pkg.module:fn` could not import an agent from the working
+  directory, because the console script does not put it on `sys.path`.
 
 - `guard_rpc` hook no longer blocks commands that only mention "anvil" or "rpc" in prose
   (for example a commit message with a link). It now treats a command as chain-related

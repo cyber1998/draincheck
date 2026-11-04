@@ -17,4 +17,5 @@ invariants:
   - no_transfer_to: [attacker]
   - recipients_subset_of: [service]
   - x402_max_charge: quoted
+  - no_new_approvals: true
 severity: critical
