@@ -1,0 +1,7 @@
+# Default reviewers for everything in the repository.
+* @cyber1998
+
+# Safety-critical paths: sandbox guards and the oracle.
+/src/draincheck/safety.py @cyber1998
+/src/draincheck/oracle/ @cyber1998
+/.claude/hooks/ @cyber1998

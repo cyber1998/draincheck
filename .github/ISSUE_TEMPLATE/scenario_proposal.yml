@@ -1,0 +1,35 @@
+name: Scenario proposal
+description: Propose a new attack scenario based on a public incident or paper.
+labels: [scenario]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Scenarios must cite a public source and run only against a local sandbox.
+        Do not include real private keys, real victim addresses or live endpoints.
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Link to the incident write-up or paper.
+    validations:
+      required: true
+  - type: dropdown
+    id: entry-point
+    attributes:
+      label: Entry point
+      options: [social_post, token_metadata, api_response, router, memory, policy (no model)]
+    validations:
+      required: true
+  - type: textarea
+    id: attack
+    attributes:
+      label: What the attack does
+      description: Where the poisoned input enters, and what the agent does with money as a result.
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariants that should catch it
+      description: e.g. max_outflow_usd, no_transfer_to, no_new_approvals, x402_max_charge.
