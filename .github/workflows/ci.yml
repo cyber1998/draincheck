@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
+      - name: Contract artifacts are up to date
+        run: uv run python scripts/build_contracts.py --check
+
       - name: Lint
         run: uv run ruff check .
 
