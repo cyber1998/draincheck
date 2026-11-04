@@ -56,6 +56,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Payload encodings `morse` and `unicode_homoglyph`.
 - `draincheck.safety.assert_local_service`, which also accepts a `file://` path inside the
   system temp directory (never a network share or automounted path).
+- 17 sourced agent-layer scenarios from the approved list in `docs/scenario-sources.md`:
+  5 social posts (including a Morse-coded relay and a fake admin session), 4 API
+  responses (from AgentDojo's banking tasks and malicious-tool papers), 3 token names and
+  5 memory poisonings (including address poisoning). Rows that are about MCP tool
+  descriptions or deterministic guardrails wait for the MCP adapter and the policy fuzzer.
 - `tests/scenarios/test_library.py` checks every scenario file: valid, filed under its
   entry point, and failed by the vulnerable demo agent. Scenarios no longer need a test
   of their own.
