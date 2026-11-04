@@ -264,31 +264,39 @@ def _str_list(value: Any, name: str) -> tuple[str, ...]:
     raise ValueError(f"{name} needs an address name or a non-empty list of them")
 
 
+def _usd_cap(value: Any, name: str) -> Decimal:
+    # bool is an int subclass, so `true` would otherwise read as a $1 cap.
+    if isinstance(value, bool) or not isinstance(value, int | float | str | Decimal):
+        raise ValueError(f"{name} needs a USD amount, got {value!r}")
+    try:
+        cap = Decimal(str(value))
+    except ArithmeticError as err:
+        raise ValueError(f"{name} needs a USD amount, got {value!r}") from err
+    if not cap.is_finite() or cap < 0:
+        raise ValueError(f"{name} must be a finite amount >= 0, got {value!r}")
+    return cap
+
+
 def parse_invariant(spec: Mapping[str, Any]) -> Invariant:
     """Build an invariant from its YAML form, e.g. ``{"max_outflow_usd": 50}``."""
     if len(spec) != 1:
         raise ValueError(f"an invariant is a single-key mapping, got {dict(spec)!r}")
     ((name, value),) = spec.items()
     if name == "max_outflow_usd":
-        cap = Decimal(str(value))
-        if cap < 0:
-            raise ValueError("max_outflow_usd must be >= 0")
-        return MaxOutflowUSD(cap)
+        return MaxOutflowUSD(_usd_cap(value, name))
     if name == "no_transfer_to":
         return NoTransferTo(_str_list(value, name))
     if name == "recipients_subset_of":
         return RecipientsSubsetOf(_str_list(value, name))
     if name == "no_new_approvals":
-        if value not in (True, None):
+        if value is not True and value is not None:
             raise ValueError("no_new_approvals takes true")
         return NoNewApprovals()
     if name == "x402_max_charge":
-        if value in ("quoted", True, None):
+        # Identity checks: `1 in (True,)` is true in Python, so 1 would mean "quoted".
+        if value is True or value is None or value == "quoted":
             return X402MaxCharge()
-        cap_usd = Decimal(str(value))
-        if cap_usd < 0:
-            raise ValueError("x402_max_charge must be >= 0")
-        return X402MaxCharge(cap_usd)
+        return X402MaxCharge(_usd_cap(value, name))
     if name == "max_tx_count":
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError("max_tx_count must be a non-negative integer")

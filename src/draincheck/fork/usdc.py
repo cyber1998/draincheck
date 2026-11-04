@@ -95,7 +95,10 @@ def ensure_usdc(node: LocalNode) -> str:
         return USDC_ADDRESS
     if node.is_fork:
         raise FundingError(f"no USDC contract at {USDC_ADDRESS} on the fork; is it Base?")
-    node.rpc("anvil_setCode", [USDC_ADDRESS, "0x" + usdc_artifact()["deployedBytecode"][2:]])
+    node.rpc(
+        "anvil_setCode",
+        [USDC_ADDRESS, "0x" + usdc_artifact()["deployedBytecode"].removeprefix("0x")],
+    )
     return USDC_ADDRESS
 
 

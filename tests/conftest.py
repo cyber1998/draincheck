@@ -26,6 +26,12 @@ def _require_anvil() -> None:
         pytest.skip("anvil not on PATH")
 
 
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    # The marker itself enforces the rule, also for tests that start anvil indirectly.
+    if item.get_closest_marker("anvil") is not None:
+        _require_anvil()
+
+
 @pytest.fixture
 def anvil() -> Iterator[AnvilProcess]:
     _require_anvil()

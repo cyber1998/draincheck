@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "fastapi>=0.115",   # mock x402 services and facilitator
     "httpx>=0.27",      # HTTP client used by the runner and the demo agent
+    "pyyaml>=6.0",      # loads scenario YAML files (safe_load only)
     "typer>=0.12",      # CLI
     "uvicorn>=0.30",    # serves the local mock services
     "web3>=7.0",        # talks to the local anvil chain
@@ -41,6 +42,7 @@ dev = [
     "mypy>=1.11",
     "pytest>=8.3",
     "ruff>=0.6",
+    "types-pyyaml>=6.0",
 ]
 
 [build-system]

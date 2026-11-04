@@ -174,6 +174,19 @@ def _trace_value_calls(w3: Web3, tx_hash: str) -> list[dict[str, Any]] | None:
     return frames
 
 
+def erc721_approval(log: Any) -> NewApproval | None:
+    """An ERC-721 ``Approval(owner, approved, tokenId)`` log as a new approval.
+
+    The approved address is topic 2. Approving the zero address is a revoke, not a grant.
+    """
+    topics = log["topics"]
+    approved = _addr(topics[2])
+    if int(approved, 16) == 0:
+        return None
+    token = Web3.to_checksum_address(log["address"])
+    return NewApproval(_hex(log["transactionHash"]), token, _addr(topics[1]), approved, 0, 1)
+
+
 def collect(
     w3: Web3,
     wallets: Iterable[str],
@@ -265,10 +278,9 @@ def collect(
         token = Web3.to_checksum_address(log["address"])
         owner, spender = _addr(topics[1]), _addr(topics[2])
         if len(topics) == 4:  # ERC-721 single-token approval
-            if _addr(topics[3]) != _addr(b"\x00" * 32) or _int(topics[3]) != 0:
-                ev.approvals.append(
-                    NewApproval(_hex(log["transactionHash"]), token, owner, spender, 0, 1)
-                )
+            approval = erc721_approval(log)
+            if approval is not None:
+                ev.approvals.append(approval)
             continue
         before = _allowance(w3, token, owner, spender, pre.block)
         after = _allowance(w3, token, owner, spender, post.block)
