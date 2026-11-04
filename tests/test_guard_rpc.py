@@ -36,6 +36,11 @@ def bash(command: str) -> str:
         f"cast send --private-key {NOT_AN_ANVIL_KEY} 0xabc",
         f"export KEY={NOT_AN_ANVIL_KEY[2:]}",
         "cast block --rpc-url wss://node.example.com",
+        "cd contracts && cast call 0xabc --rpc-url https://node.example.com",
+        "FOUNDRY_PROFILE=ci ~/.foundry/bin/anvil --fork-url https://node.example.com",
+        "forge script Deploy.s.sol --rpc https://node.example.com",
+        "python -c 'Web3(Web3.HTTPProvider(\"https://node.example.com\"))'",
+        'curl -d \'{"method":"eth_chainId"}\' https://node.example.com',
     ],
 )
 def test_blocks(command: str) -> None:
@@ -55,6 +60,9 @@ def test_blocks(command: str) -> None:
         "uv add httpx && curl -sSf https://pypi.org/simple/httpx/",
         "uv run pytest",
         "git log -1 --format=%H",
+        # Prose that mentions anvil or rpc next to a link is not a chain command.
+        "git commit -m 'Run guard_rpc in CI with anvil\n\nSee https://example.com/notes'",
+        "gh pr create --body 'Adds assert_local_rpc; docs at https://example.com/rpc'",
     ],
 )
 def test_allows(command: str) -> None:

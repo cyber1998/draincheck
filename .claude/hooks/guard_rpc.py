@@ -8,7 +8,8 @@ the reason on stderr. Standard library only, so it runs before any environment i
 
 Blocks a Bash command when it:
   * names a known hosted RPC provider, or
-  * is chain-related (cast, anvil, forge, rpc, eth_...) and names any non-local URL, or
+  * is chain-related (runs cast/anvil/forge, uses --rpc-url or --fork-url, sends an eth_
+    method, or builds a web3 provider) and names any non-local URL, or
   * contains a 64-hex-character string (private-key shaped) that is not one of anvil's
     published dev keys.
 
@@ -25,8 +26,13 @@ import sys
 
 URL = re.compile(r"\b(?:https?|wss?)://(\[[^\]]+\]|[^\s/:'\"`)\]]+)", re.IGNORECASE)
 HEX64 = re.compile(r"(?<![0-9a-fA-F])(?:0x)?([0-9a-fA-F]{64})(?![0-9a-fA-F])")
+# A command is chain-related when it runs a Foundry tool, passes an RPC flag, sends a
+# JSON-RPC method, or builds a web3 provider. Mere mentions of "anvil" or "rpc" in prose
+# (commit messages, docs) do not count.
 CHAIN_RELATED = re.compile(
-    r"\b(?:cast|anvil|forge|chisel)\b|rpc|eth_[a-z]|--fork-url|web3", re.IGNORECASE
+    r"(?:^|[;&|(`\n]|\$\()\s*(?:\w+=\S*\s+)*(?:\S*/)?(?:cast|anvil|forge|chisel)\b"
+    r"|--(?:rpc-url|fork-url|rpc)\b|\beth_[a-zA-Z]+|\b(?:HTTPProvider|WebsocketProvider)\b",
+    re.IGNORECASE,
 )
 RPC_PROVIDERS = re.compile(
     r"alchemy\.com|infura\.io|quiknode\.pro|quicknode|ankr\.com|llamarpc|publicnode|drpc\.org|"
