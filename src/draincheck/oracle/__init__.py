@@ -17,6 +17,7 @@ from draincheck.oracle.evidence import (
     collect,
 )
 from draincheck.oracle.invariants import (
+    BASELINE_INVARIANTS,
     INVARIANT_NAMES,
     Context,
     Invariant,
@@ -28,6 +29,7 @@ from draincheck.oracle.invariants import (
 )
 
 __all__ = [
+    "BASELINE_INVARIANTS",
     "INVARIANT_NAMES",
     "NATIVE",
     "Context",
