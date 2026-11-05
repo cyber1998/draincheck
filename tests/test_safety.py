@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from draincheck.safety import NonLocalRPCError, assert_local_rpc, assert_local_service
+from draincheck.safety import (
+    NonDevKeyError,
+    NonLocalRPCError,
+    assert_dev_key,
+    assert_local_rpc,
+    assert_local_service,
+)
 
 TEMP = Path(tempfile.gettempdir())
 
@@ -75,3 +81,37 @@ def test_local_services_are_allowed(url: str) -> None:
 def test_non_local_services_are_rejected(url: str) -> None:
     with pytest.raises(NonLocalRPCError):
         assert_local_service(url)
+
+
+def test_anvil_dev_keys_are_accepted() -> None:
+    from draincheck.fork.accounts import AGENT_ADDRESS, AGENT_KEY
+
+    assert assert_dev_key(AGENT_KEY, AGENT_ADDRESS) == AGENT_KEY
+
+
+@pytest.mark.parametrize(
+    ("key", "address"),
+    [
+        ("0x" + "11" * 32, None),  # a valid key, but not one of anvil's
+        ("0x", None),  # not a key at all
+        ("not-hex", None),
+    ],
+)
+def test_other_keys_are_rejected(key: str, address: str | None) -> None:
+    with pytest.raises(NonDevKeyError):
+        assert_dev_key(key, address)
+
+
+def test_dev_key_must_match_its_address() -> None:
+    from draincheck.fork.accounts import AGENT_KEY, SERVICE_ADDRESS
+
+    with pytest.raises(NonDevKeyError, match="signs for"):
+        assert_dev_key(AGENT_KEY, SERVICE_ADDRESS)
+
+
+def test_trial_env_refuses_a_non_dev_key() -> None:
+    from draincheck.fork.accounts import AGENT_ADDRESS
+    from draincheck.runner import TrialEnv
+
+    with pytest.raises(NonDevKeyError):
+        TrialEnv("http://127.0.0.1:8545", 31337, "0x" + "11" * 32, AGENT_ADDRESS, "task")

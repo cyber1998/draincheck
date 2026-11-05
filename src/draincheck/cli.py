@@ -51,7 +51,12 @@ def run(
     ],
     agent: Annotated[
         str,
-        typer.Option(help="Your agent, as 'package.module:function'. Runs as trusted code."),
+        typer.Option(
+            help=(
+                "Your agent: 'package.module:function' (runs as trusted code in this"
+                " process) or a local service URL such as http://127.0.0.1:8000/run."
+            )
+        ),
     ],
     fork: Annotated[
         bool, typer.Option(help="Fork Base through DRAINCHECK_FORK_URL instead of an empty chain.")

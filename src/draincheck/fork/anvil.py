@@ -26,7 +26,7 @@ from urllib.parse import urlsplit
 import httpx
 from web3 import Web3
 
-from draincheck.safety import assert_local_rpc
+from draincheck.safety import assert_local_rpc, local_http_client, local_web3
 
 ANVIL_CHAIN_ID = 31337
 FORK_URL_ENV = "DRAINCHECK_FORK_URL"
@@ -93,7 +93,8 @@ def anvil_env() -> dict[str, str]:
 def rpc_call(rpc_url: str, method: str, params: list[Any] | None = None) -> Any:
     """Send one JSON-RPC request to a local node and return its ``result``."""
     body = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}
-    response = httpx.post(assert_local_rpc(rpc_url), json=body, timeout=30.0)
+    with local_http_client(timeout=30.0) as client:
+        response = client.post(assert_local_rpc(rpc_url), json=body)
     response.raise_for_status()
     payload = response.json()
     if "error" in payload:
@@ -170,7 +171,9 @@ class AnvilProcess:
                 self._proc = None
                 raise RuntimeError(f"anvil exited early with code {code}")
             try:
-                if httpx.post(self.rpc_url, json=body, timeout=1.0).status_code == 200:
+                with local_http_client(timeout=1.0) as client:
+                    ready = client.post(assert_local_rpc(self.rpc_url), json=body)
+                if ready.status_code == 200:
                     return
             except httpx.TransportError:
                 pass
@@ -213,7 +216,7 @@ class AnvilProcess:
     def w3(self) -> Web3:
         """A Web3 client for this node, created once. Local only."""
         if self._w3 is None:
-            self._w3 = Web3(Web3.HTTPProvider(assert_local_rpc(self.rpc_url)))
+            self._w3 = local_web3(self.rpc_url)
         return self._w3
 
     def stop(self) -> None:

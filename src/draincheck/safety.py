@@ -3,7 +3,9 @@
 """Guards that keep every chain connection on the local machine.
 
 Draincheck only ever talks to a local anvil node. Every component that opens an RPC
-connection must pass its URL through :func:`assert_local_rpc` first.
+connection must pass its URL through :func:`assert_local_rpc` first, and should build its
+client with :func:`local_web3` or :func:`local_http_client`: a proxy set in the
+environment or the system settings would otherwise carry "local" traffic off the machine.
 """
 
 from __future__ import annotations
@@ -11,7 +13,12 @@ from __future__ import annotations
 import ipaddress
 import tempfile
 from pathlib import Path
+from typing import Any
 from urllib.parse import unquote, urlsplit
+
+import httpx
+import requests
+from web3 import Web3
 
 ALLOWED_SCHEMES = frozenset({"http", "https", "ws", "wss"})
 
@@ -62,3 +69,59 @@ def assert_local_service(url: str) -> str:
             raise NonLocalRPCError(f"file URL must be inside {temp}, got {url!r}")
         return url
     return assert_local_rpc(url)
+
+
+def local_web3(rpc_url: str, timeout: float = 30.0) -> Web3:
+    """A Web3 client for a local node that ignores proxies and never follows redirects.
+
+    requests (under web3) reads proxies from the environment and system settings even for
+    127.0.0.1, including host-keyed ``<url>_proxy`` variables, so the session is built with
+    ``trust_env`` off rather than by overriding single keys.
+    """
+    session = requests.Session()
+    session.trust_env = False
+    provider = Web3.HTTPProvider(
+        assert_local_rpc(rpc_url),
+        session=session,
+        request_kwargs={"allow_redirects": False, "timeout": timeout},
+    )
+    return Web3(provider)
+
+
+def local_http_client(**kwargs: Any) -> httpx.Client:
+    """An httpx client for local services that ignores proxies and never follows redirects.
+
+    Callers still check each URL with :func:`assert_local_rpc` or
+    :func:`assert_local_service`.
+    """
+    return httpx.Client(trust_env=False, follow_redirects=False, **kwargs)
+
+
+class NonDevKeyError(ValueError):
+    """Raised when a key is not one of anvil's published dev keys."""
+
+
+def assert_dev_key(private_key: str, address: str | None = None) -> str:
+    """Return `private_key` if it belongs to one of anvil's ten default accounts.
+
+    Checked by the address it signs for, so no key needs to be listed here. With
+    `address`, the key must also be that account's.
+    """
+    from eth_account import Account
+
+    from draincheck.fork.accounts import ANVIL_ADDRESSES
+
+    try:
+        signer = Account.from_key(private_key).address
+    except (ValueError, TypeError) as err:
+        raise NonDevKeyError("agent key is not a valid private key") from err
+    if signer not in ANVIL_ADDRESSES:
+        raise NonDevKeyError("Draincheck only signs with anvil's published dev keys")
+    if address is not None:
+        try:
+            expected = Web3.to_checksum_address(address)
+        except (ValueError, TypeError) as err:
+            raise NonDevKeyError(f"{address!r} is not an address") from err
+        if expected != signer:
+            raise NonDevKeyError(f"agent key signs for {signer}, not {address}")
+    return private_key

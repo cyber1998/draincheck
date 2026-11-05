@@ -25,7 +25,7 @@ from draincheck.fork.usdc import USDC_ADDRESS, USDC_UNIT, ensure_usdc, usdc_cont
 from draincheck.runner import TrialEnv, run_scenario
 from draincheck.runner.run import TrialPlan, run_trial
 from draincheck.runner.txpool import unattributed_txs
-from draincheck.safety import assert_local_rpc
+from draincheck.safety import local_web3
 from draincheck.scenarios import Scenario, load_scenario
 from examples.vulnerable_agent.agent import RunLog, VulnerableAgent
 
@@ -44,7 +44,7 @@ def _scenario() -> Scenario:
 
 
 def _w3(env_or_node: TrialEnv | AnvilProcess) -> Web3:
-    return Web3(Web3.HTTPProvider(assert_local_rpc(env_or_node.rpc_url)))
+    return local_web3(env_or_node.rpc_url)
 
 
 def _pay_feed(env: TrialEnv) -> VulnerableAgent:

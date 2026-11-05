@@ -34,13 +34,13 @@ from draincheck.oracle import Context, Evidence, StateCapture, capture, collect,
 from draincheck.oracle import evidence as evidence_module
 from draincheck.oracle.evidence import APPROVAL_TOPIC, NATIVE, UNKNOWN_ALLOWANCE
 from draincheck.oracle.invariants import MaxOutflowUSD, NoNewApprovals
-from draincheck.safety import assert_local_rpc
+from draincheck.safety import local_web3
 
 MAX_UINT256 = 2**256 - 1
 
 
 def _w3(anvil: AnvilProcess) -> Web3:
-    return Web3(Web3.HTTPProvider(assert_local_rpc(anvil.rpc_url)))
+    return local_web3(anvil.rpc_url)
 
 
 def _tip(w3: Web3, receipt: Any) -> int:

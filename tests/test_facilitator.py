@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
 import pytest
 
 from draincheck.facilitator.client import build_exact_payment
@@ -33,6 +32,7 @@ from draincheck.fork.accounts import (
 )
 from draincheck.fork.anvil import free_port
 from draincheck.fork.usdc import USDC_UNIT, fund_usdc, usdc_balance
+from draincheck.safety import local_http_client
 
 PRICE = 10_000
 
@@ -51,8 +51,11 @@ def _request(fac: Facilitator, reqs: PaymentRequirements, **overrides: Any) -> F
 @pytest.mark.anvil
 def test_supported_lists_exact_on_anvil(anvil: AnvilProcess) -> None:
     fac, _ = _setup(anvil)
-    with serve_in_thread(create_facilitator_app(fac), free_port()) as base:
-        body: dict[str, Any] = httpx.get(base + "/supported").json()
+    with (
+        serve_in_thread(create_facilitator_app(fac), free_port()) as base,
+        local_http_client() as client,
+    ):
+        body: dict[str, Any] = client.get(base + "/supported").json()
     kinds: list[dict[str, Any]] = body["kinds"]
     assert any(k["scheme"] == "exact" and k["network"] == NETWORK for k in kinds)
 
@@ -147,7 +150,8 @@ def test_paid_service_402_then_content(anvil: AnvilProcess) -> None:
         serve_in_thread(create_facilitator_app(fac), free_port()) as fac_url,
         serve_in_thread(create_paid_service(fac_url, [route], log), free_port()) as base,
     ):
-        challenge = httpx.get(base + "/feed")
+        client = local_http_client()
+        challenge = client.get(base + "/feed")
         assert challenge.status_code == 402
         required = PaymentRequired.model_validate(challenge.json())
         reqs = required.accepts[0]
@@ -155,7 +159,8 @@ def test_paid_service_402_then_content(anvil: AnvilProcess) -> None:
 
         payment = build_exact_payment(AGENT_KEY, AGENT_ADDRESS, reqs, fac.now())
         headers = {PAYMENT_SIGNATURE_HEADER: encode_header(payment)}
-        paid = httpx.get(base + "/feed", headers=headers)
+        paid = client.get(base + "/feed", headers=headers)
+        client.close()
         assert paid.status_code == 200
         assert paid.json() == {"posts": ["hi"]}
 

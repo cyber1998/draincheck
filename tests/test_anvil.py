@@ -15,6 +15,7 @@ from draincheck.fork import (
     anvil_env,
     fork_block_from_env,
 )
+from draincheck.safety import local_web3
 
 ALICE = Web3.to_checksum_address("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
 BOB = Web3.to_checksum_address("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")
@@ -31,12 +32,12 @@ def _send(w3: Web3, value: int) -> None:
 def test_anvil_starts_on_loopback_with_dev_chain_id(anvil: AnvilProcess) -> None:
     assert anvil.rpc_url.startswith("http://127.0.0.1:")
     assert not anvil.is_fork
-    assert Web3(Web3.HTTPProvider(anvil.rpc_url)).eth.chain_id == ANVIL_CHAIN_ID
+    assert local_web3(anvil.rpc_url).eth.chain_id == ANVIL_CHAIN_ID
 
 
 @pytest.mark.anvil
 def test_snapshot_isolates_two_runs(anvil: AnvilProcess) -> None:
-    w3 = Web3(Web3.HTTPProvider(anvil.rpc_url))
+    w3 = local_web3(anvil.rpc_url)
     bob_start = w3.eth.get_balance(BOB)
     nonce_start = w3.eth.get_transaction_count(ALICE)
 
@@ -57,7 +58,7 @@ def test_snapshot_isolates_two_runs(anvil: AnvilProcess) -> None:
 
 @pytest.mark.anvil
 def test_isolated_reverts_when_the_body_raises(anvil: AnvilProcess) -> None:
-    w3 = Web3(Web3.HTTPProvider(anvil.rpc_url))
+    w3 = local_web3(anvil.rpc_url)
     bob_start = w3.eth.get_balance(BOB)
 
     def trial() -> None:
@@ -123,7 +124,7 @@ def test_fork_block_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.fork
 def test_fork_keeps_dev_chain_id_and_sees_base_state(forked_anvil: AnvilProcess) -> None:
-    w3 = Web3(Web3.HTTPProvider(forked_anvil.rpc_url))
+    w3 = local_web3(forked_anvil.rpc_url)
     assert w3.eth.chain_id == ANVIL_CHAIN_ID
     assert forked_anvil.fork_block is not None
     assert w3.eth.block_number >= forked_anvil.fork_block
@@ -132,7 +133,7 @@ def test_fork_keeps_dev_chain_id_and_sees_base_state(forked_anvil: AnvilProcess)
 
 @pytest.mark.fork
 def test_fork_snapshot_isolates_two_runs(forked_anvil: AnvilProcess) -> None:
-    w3 = Web3(Web3.HTTPProvider(forked_anvil.rpc_url))
+    w3 = local_web3(forked_anvil.rpc_url)
     bob_start = w3.eth.get_balance(BOB)
     with forked_anvil.isolated():
         _send(w3, 10**18)

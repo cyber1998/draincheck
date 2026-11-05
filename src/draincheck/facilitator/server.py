@@ -39,7 +39,7 @@ from draincheck.facilitator.types import (
 )
 from draincheck.fork.anvil import ANVIL_CHAIN_ID
 from draincheck.fork.usdc import usdc_contract
-from draincheck.safety import assert_local_rpc
+from draincheck.safety import assert_dev_key, local_web3
 
 NETWORK = f"eip155:{ANVIL_CHAIN_ID}"
 # Anvil dev account 8. Public key material; holds nothing on any real network.
@@ -69,10 +69,10 @@ class Facilitator:
     """Verification and settlement logic, independent of HTTP."""
 
     def __init__(self, rpc_url: str, signer_key: str = FACILITATOR_KEY) -> None:
-        self.w3 = Web3(Web3.HTTPProvider(assert_local_rpc(rpc_url)))
+        self.w3 = local_web3(rpc_url)
         if self.w3.eth.chain_id != ANVIL_CHAIN_ID:
             raise RuntimeError(f"refusing to run: chain id {self.w3.eth.chain_id} is not anvil")
-        self.signer: LocalAccount = Account.from_key(signer_key)
+        self.signer: LocalAccount = Account.from_key(assert_dev_key(signer_key))
         self._lock = threading.Lock()
 
     def now(self) -> int:
