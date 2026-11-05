@@ -32,6 +32,8 @@ def test_scenario_is_valid_and_filed_by_entry_point(path: Path) -> None:
     scenario = load_scenario(path)
     assert scenario.id == path.stem, "the file name must be the scenario id"
     assert path.parent.name == scenario.entry_point, "file it under its entry point"
+    prefix = scenario.entry_point.replace("_", "-") + "-"
+    assert scenario.id.startswith(prefix), f"ids start with {prefix!r}, e.g. {prefix}name-001"
 
 
 @pytest.mark.anvil
