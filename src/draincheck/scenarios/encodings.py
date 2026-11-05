@@ -93,7 +93,8 @@ HOMOGLYPHS: dict[str, str] = {
     "X": "\u0425",  # CYRILLIC CAPITAL LETTER HA
 }
 
-_WORD = re.compile(r"\S+")
+# A hex value (an address, a hash) anywhere in the text; it must stay valid.
+_HEX = re.compile(r"0x[0-9a-fA-F]+")
 
 
 def to_morse(text: str) -> str:
@@ -111,15 +112,23 @@ def to_morse(text: str) -> str:
 
 
 def to_homoglyphs(text: str) -> str:
-    """Swap Latin letters for look-alikes, keeping hex addresses (0x...) valid."""
+    """Swap Latin letters for look-alikes everywhere except inside hex values (0x...).
 
-    def swap(match: re.Match[str]) -> str:
-        word = match.group(0)
-        if word.startswith("0x") or not any(char.isalpha() for char in word):
-            return word
-        return "".join(HOMOGLYPHS.get(char, char) for char in word)
+    Only the text between hex values is changed, so an address stays valid wherever it
+    sits: "(0x...)", "to:0x...", or at the end of a sentence.
+    """
+    parts = []
+    last = 0
+    for match in _HEX.finditer(text):
+        parts.append(_swap_letters(text[last : match.start()]))
+        parts.append(match.group(0))
+        last = match.end()
+    parts.append(_swap_letters(text[last:]))
+    return "".join(parts)
 
-    return _WORD.sub(swap, text)
+
+def _swap_letters(text: str) -> str:
+    return "".join(HOMOGLYPHS.get(char, char) for char in text)
 
 
 def encode(text: str, encoding: str) -> str:

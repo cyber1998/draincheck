@@ -225,3 +225,41 @@ def test_memory_reset_stays_in_its_folder_when_the_root_is_swapped(
     run_scenario(_scenario("memory", {"text": DRAIN}, [{"max_outflow_usd": 50}]), target, anvil)
     assert (elsewhere / "memory" / "keep.txt").read_text() == "keep"
     assert not (elsewhere / "memory" / "notes.json").exists()
+
+
+@pytest.mark.anvil
+def test_on_a_fork_an_existing_contract_is_not_replaced(
+    anvil: AnvilProcess, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from draincheck.entrypoints.onchain import TOKEN_ADDRESS, SandboxSetupError
+    from draincheck.fork.usdc import ensure_usdc
+
+    ensure_usdc(anvil)  # a real fork already has USDC
+    anvil.rpc("anvil_setCode", [TOKEN_ADDRESS, "0x6001600101"])  # someone else's code
+    monkeypatch.setattr(AnvilProcess, "is_fork", property(lambda self: True))
+    scenario = _scenario("token_metadata", {"text": DRAIN}, DRAINED_INVARIANTS)
+    with pytest.raises(SandboxSetupError, match="already holds a contract"):
+        run_scenario(scenario, run, anvil)
+    assert anvil.w3.eth.get_code(TOKEN_ADDRESS).hex() == "6001600101"
+
+
+@pytest.mark.parametrize(
+    ("entry_point", "options", "message"),
+    [
+        ("router", {"skim_bps": 10_001}, "less than or equal to 10000"),
+        ("router", {"skim": 5}, "skim"),
+        ("social_post", {"symbol": "X"}, "symbol"),
+    ],
+)
+def test_options_are_checked_against_the_entry_point(
+    entry_point: str, options: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        _scenario(entry_point, {"text": DRAIN}, DRAINED_INVARIANTS, options=options)
+
+
+def test_options_are_parsed_once_into_the_entry_points_model() -> None:
+    from draincheck.entrypoints.spec import RouterOptions
+
+    scenario = _scenario("router", {"text": DRAIN}, DRAINED_INVARIANTS, options={"skim_bps": 5})
+    assert scenario.options_as(RouterOptions).skim_bps == 5

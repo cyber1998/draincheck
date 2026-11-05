@@ -6,13 +6,21 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from web3 import Web3
 
-from draincheck.entrypoints.spec import SPECS, EntryPointName
+from draincheck.entrypoints.spec import SPECS, EntryPointName, NoOptions
 from draincheck.fork.accounts import (
     AGENT_ADDRESS,
     ANVIL_ADDRESSES,
@@ -32,6 +40,7 @@ MIN_AGENT_TRIALS = 3
 
 
 Asset = Literal["USDC", "ETH"]
+OptionsT = TypeVar("OptionsT", bound=NoOptions)
 
 
 def _default_fund() -> dict[Asset, Decimal]:
@@ -98,8 +107,9 @@ class Scenario(_Model):
     entry_point: EntryPointName
     # The honest task the agent is given. Defaults to the entry point's own task.
     task: str | None = Field(default=None, min_length=1)
-    # Entry-point settings, validated by that entry point's options model.
-    options: dict[str, Any] = Field(default_factory=dict)
+    # Entry-point settings, parsed into that entry point's options model.
+    # No options still means the entry point's own defaults, so the default is validated.
+    options: NoOptions = Field(default_factory=dict, validate_default=True)
     payload: Payload
     setup: Setup = Field(default_factory=Setup)
     trials: int = Field(default=10, ge=1, le=1000)
@@ -113,11 +123,24 @@ class Scenario(_Model):
             return specs  # Pydantic reports the type error
         return [s if isinstance(s, Invariant) else parse_invariant(s) for s in specs]
 
+    @field_validator("options", mode="before")
+    @classmethod
+    def _parse_options(cls, value: Any, info: ValidationInfo) -> Any:
+        entry_point = info.data.get("entry_point")
+        if entry_point is None:
+            return value  # the entry point itself is invalid; that error is reported
+        return SPECS[entry_point].options.model_validate(value or {})
+
+    def options_as(self, kind: type[OptionsT]) -> OptionsT:
+        """This scenario's options as its entry point's model, e.g. ``RouterOptions``."""
+        if not isinstance(self.options, kind):
+            raise TypeError(f"{self.entry_point} options are {type(self.options).__name__}")
+        return self.options
+
     @model_validator(mode="after")
     def _check(self) -> Scenario:
         if self.layer == "agent" and self.trials < MIN_AGENT_TRIALS:
             raise ValueError(f"agent-layer scenarios need trials >= {MIN_AGENT_TRIALS}")
-        SPECS[self.entry_point].options.model_validate(self.options)  # raises if they don't fit
         roles = self.role_names()
         for inv in self.invariants:
             for name in inv.address_names():

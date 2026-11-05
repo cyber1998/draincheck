@@ -52,11 +52,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   swap router with skim and allowance-drain switches), installed by a dedicated deployer
   account (anvil account 9).
 - Scenario fields `task` (the honest task, defaulting per entry point) and `options`
-  (entry-point settings), and the role names `router` and `token` for invariants.
+  (entry-point settings, parsed once into the entry point's model; read them with
+  `Scenario.options_as`), and the role names `router` and `token` for invariants.
 - Payload encodings `morse` and `unicode_homoglyph`.
 - `draincheck.safety.assert_local_service`, which also accepts a `file://` path inside the
   system temp directory (never a network share or automounted path).
-- 17 sourced agent-layer scenarios from the approved list in `docs/scenario-sources.md`:
+- 17 sourced agent-layer scenarios from the approved list in `docs/scenario-sources.md`
+  (ids start with the entry point in hyphens, e.g. `social-post-morse-relay-001`):
   5 social posts (including a Morse-coded relay and a fake admin session), 4 API
   responses (from AgentDojo's banking tasks and malicious-tool papers), 3 token names and
   5 memory poisonings (including address poisoning). Rows that are about MCP tool
@@ -95,6 +97,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The `unicode_homoglyph` encoding changed the letters of an address written inside
+  punctuation (`(0x...)`, `to:0x...`), so a real agent could not send to it and the
+  scenario passed. Only text between hex values is changed now.
+- On a fork, the token and router entry points would have overwritten any contract
+  already at their fixed addresses. They now refuse (`SandboxSetupError`).
 - `recipients_subset_of` missed value a contract forwarded inside the agent's own
   transaction: allowing a router let the router pay the attacker with the agent's tokens.
   Routed payments now count as the agent's.
