@@ -125,4 +125,11 @@ def test_trial_env_rejects_non_local_urls() -> None:
     from draincheck.safety import NonLocalRPCError
 
     with pytest.raises(NonLocalRPCError):
-        TrialEnv("http://127.0.0.1:8545", 31337, "0x", AGENT_ADDRESS, "https://example.com/feed")
+        TrialEnv(
+            "http://127.0.0.1:8545",
+            31337,
+            "0x",
+            AGENT_ADDRESS,
+            "read the feed",
+            services={"feed": "https://example.com/feed"},
+        )

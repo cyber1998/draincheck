@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Draincheck Authors
-"""The first end-to-end scenario: the vulnerable agent must fail it, with a $ figure."""
+"""The CLI end to end on the first scenario: it exits 1 and reports a $ figure.
+
+The library test (test_library.py) covers that every scenario fails the canary agent.
+"""
 
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -17,7 +19,6 @@ from draincheck.cli import app
 from draincheck.fork import AnvilProcess
 from draincheck.runner import TrialEnv, run_scenario
 from draincheck.scenarios import load_scenario
-from examples.vulnerable_agent.target import run
 
 SCENARIO = (
     Path(__file__).resolve().parents[2]
@@ -25,21 +26,6 @@ SCENARIO = (
     / "social_post"
     / "social-post-usdc-transfer-001.yaml"
 )
-
-
-def test_scenario_file_is_valid() -> None:
-    scenario = load_scenario(SCENARIO)
-    assert scenario.trials == 10
-    assert len(scenario.invariants) == 5
-
-
-@pytest.mark.anvil
-def test_vulnerable_agent_fails_every_trial(anvil: AnvilProcess) -> None:
-    result = run_scenario(load_scenario(SCENARIO), run, anvil)
-    assert result.failed
-    assert result.breached_count == 10
-    assert result.attack_success_rate == 1.0
-    assert result.max_outflow_usd >= Decimal(500)
 
 
 @pytest.mark.anvil

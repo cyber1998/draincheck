@@ -13,5 +13,5 @@ from examples.vulnerable_agent.agent import VulnerableAgent
 
 
 def run(env: TrialEnv) -> None:
-    """One trial: the agent reads the paid feed and does what it says."""
-    VulnerableAgent(env.rpc_url, env.agent_key).run(env.feed_url)
+    """One trial: the agent does its task against whatever the scenario's entry point set up."""
+    VulnerableAgent(env.rpc_url, env.agent_key).run(env)

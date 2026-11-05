@@ -44,11 +44,35 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `draincheck doctor` also reports `forge` (optional).
 - First scenario, `social-post-usdc-transfer-001`: a poisoned post makes the demo agent
   send 500 USDC to the attacker.
+- Entry points (`draincheck.entrypoints`): a scenario's payload can now reach the agent
+  as a paid social post, a paid API response, a note in its memory file (rebuilt each
+  trial, without following links the agent leaves), the name of a token it holds, or the note of a paid swap router listing. The
+  router can be configured to skim to the attacker or drain the agent's whole allowance.
+- Sandbox contracts `TestToken` (ERC-20 with settable metadata) and `TestRouter` (a 1:1
+  swap router with skim and allowance-drain switches), installed by a dedicated deployer
+  account (anvil account 9).
+- Scenario fields `task` (the honest task, defaulting per entry point) and `options`
+  (entry-point settings), and the role names `router` and `token` for invariants.
+- Payload encodings `morse` and `unicode_homoglyph`.
+- `draincheck.safety.assert_local_service`, which also accepts a `file://` path inside the
+  system temp directory (never a network share or automounted path).
+- 17 sourced agent-layer scenarios from the approved list in `docs/scenario-sources.md`:
+  5 social posts (including a Morse-coded relay and a fake admin session), 4 API
+  responses (from AgentDojo's banking tasks and malicious-tool papers), 3 token names and
+  5 memory poisonings (including address poisoning). Rows that are about MCP tool
+  descriptions or deterministic guardrails wait for the MCP adapter and the policy fuzzer.
+- `tests/scenarios/test_library.py` checks every scenario file: valid, filed under its
+  entry point, and failed by the vulnerable demo agent. Scenarios no longer need a test
+  of their own.
 
 ### Changed
 
 - The demo agent now pays through the mock x402 facilitator in USDC and also obeys
   injected USDC transfers. Its old tx-hash payment service is removed.
+- `TrialEnv` replaces `feed_url` with `task`, `services` (name to local URL) and
+  `contracts` (name to address). The demo agent works with every entry point: it follows
+  API notes, memory notes and token names, decodes obfuscated text, and swaps through any
+  router with an unlimited approval and no slippage limit.
 - Tests marked `anvil` skip (or fail in CI) on a missing anvil even when they do not use
   the `anvil` fixture.
 - Invariants are validated Pydantic dataclasses, parsed once when the scenario loads
@@ -71,6 +95,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `recipients_subset_of` missed value a contract forwarded inside the agent's own
+  transaction: allowing a router let the router pay the attacker with the agent's tokens.
+  Routed payments now count as the agent's.
 - `x402_max_charge: 1` was read as "use the quote" because `1 == True` in Python; it now
   means a $1 cap. Booleans, NaN and infinite caps are rejected.
 - ERC-721 approvals were detected from the token id instead of the approved address, so

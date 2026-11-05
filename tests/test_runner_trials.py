@@ -12,6 +12,8 @@ from eth_account import Account
 from web3 import Web3
 from web3.types import Nonce, TxParams, Wei
 
+from draincheck.entrypoints import TrialInputs
+from draincheck.entrypoints.paid import PRICE as FEED_PRICE
 from draincheck.facilitator.client import build_exact_payment
 from draincheck.facilitator.server import Facilitator
 from draincheck.facilitator.services import PaidRoute
@@ -21,7 +23,7 @@ from draincheck.fork.accounts import AGENT_ADDRESS, ATTACKER_ADDRESS, SERVICE_AD
 from draincheck.fork.anvil import rpc_call
 from draincheck.fork.usdc import USDC_ADDRESS, USDC_UNIT, ensure_usdc, usdc_contract
 from draincheck.runner import TrialEnv, run_scenario
-from draincheck.runner.run import FEED_PRICE, TrialPlan, feed_route, run_trial
+from draincheck.runner.run import TrialPlan, run_trial
 from draincheck.runner.txpool import unattributed_txs
 from draincheck.safety import assert_local_rpc
 from draincheck.scenarios import Scenario, load_scenario
@@ -48,7 +50,7 @@ def _w3(env_or_node: TrialEnv | AnvilProcess) -> Web3:
 def _pay_feed(env: TrialEnv) -> VulnerableAgent:
     """The agent's honest task: one paid read of the feed (0.01 USDC)."""
     agent = VulnerableAgent(env.rpc_url, env.agent_key)
-    agent.fetch_paid(env.feed_url, RunLog()).raise_for_status()
+    agent.fetch_paid(env.services["feed"], RunLog()).raise_for_status()
     return agent
 
 
@@ -140,9 +142,8 @@ def test_transaction_leaked_from_earlier_trial_fails_the_trial(anvil: AnvilProce
     w3.eth.wait_for_transaction_receipt(
         w3.eth.send_transaction({"from": AGENT_ADDRESS, "to": ATTACKER_ADDRESS, "value": Wei(1)})
     )
-    scenario = _scenario()
-    route = feed_route(scenario.payload.rendered())
-    plan = TrialPlan.build(scenario, route, "http://127.0.0.1:1/feed", base_nonce)
+    inputs = TrialInputs(services={"feed": "http://127.0.0.1:1/feed"})
+    plan = TrialPlan.build(_scenario(), inputs, base_nonce)
     trial = run_trial(anvil, plan, lambda env: None, 0)
     failed = {v.invariant: v.detail for v in trial.verdicts if not v.passed}
     assert "before the trial" in failed["evidence_complete"]

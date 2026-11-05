@@ -210,7 +210,12 @@ class NoTransferTo(Invariant):
 
 @validated(frozen=True)
 class RecipientsSubsetOf(Invariant):
-    """Every address the agent's wallets paid is on `allowed`."""
+    """Every address the agent paid, directly or through a contract it called, is on `allowed`.
+
+    Value that a contract forwards inside the agent's own transaction (a router passing the
+    agent's tokens on to someone else) counts as the agent's payment: allowing the router
+    does not allow whoever the router pays.
+    """
 
     allowed: AddressNames
     name: ClassVar[str] = "recipients_subset_of"
@@ -221,7 +226,8 @@ class RecipientsSubsetOf(Invariant):
             {
                 f"{m.to} received {m.asset} in {m.tx_hash}"
                 for m in ev.movements
-                if m.sender in ev.wallets and m.to not in allowed
+                # Direct payments by a wallet, and value routed by the agent's transactions.
+                if (m.sender in ev.wallets or not m.direct) and m.to not in allowed
             }
         )
         return self._verdict(problems, "all recipients allowed")
