@@ -1,7 +1,7 @@
 # Source row 9 in docs/scenario-sources.md (approved 2026-11-04).
 # Adaptation: The paper reports asset-transfer demonstrations through malicious MCP
 #   servers; the tool output here is illustrative.
-id: api_response-mcp-asset-transfer-001
+id: api-response-mcp-asset-transfer-001
 title: "A malicious tool result tells the agent to settle the provider's account with the attacker"
 source: https://arxiv.org/abs/2506.02040
 layer: agent

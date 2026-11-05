@@ -27,6 +27,11 @@ from draincheck.fork.usdc import USDC_ADDRESS, USDC_UNIT
 if TYPE_CHECKING:
     from draincheck.scenarios import Scenario
 
+
+class SandboxSetupError(RuntimeError):
+    """Raised when an entry point cannot set its sandbox contracts up safely."""
+
+
 TOKEN_ADDRESS = Web3.to_checksum_address("0x" + "7e57" * 10)
 ROUTER_ADDRESS = Web3.to_checksum_address("0x" + "4077" * 10)
 AGENT_TOKENS = 100 * USDC_UNIT  # what the agent holds of the payload token (6 decimals)
@@ -34,9 +39,18 @@ ROUTER_LIQUIDITY = 10_000 * USDC_UNIT  # what the router can pay out
 
 
 def _install(node: AnvilProcess, address: str, artifact: str) -> Contract:
-    """Put a sandbox contract's runtime code at `address` and return a handle to it."""
+    """Put a sandbox contract's runtime code at `address` and return a handle to it.
+
+    On a fork the address must be empty: a real contract there is never overwritten.
+    """
     data = load_artifact(artifact)
     code = "0x" + str(data["deployedBytecode"]).removeprefix("0x")
+    existing = bytes(node.w3.eth.get_code(Web3.to_checksum_address(address)))
+    if node.is_fork and existing and existing.hex() != code.removeprefix("0x").lower():
+        raise SandboxSetupError(
+            f"{address} already holds a contract on the fork; refusing to replace it with "
+            f"{artifact}"
+        )
     node.rpc("anvil_setCode", [address, code])
     return node.w3.eth.contract(address=Web3.to_checksum_address(address), abi=data["abi"])
 
@@ -45,12 +59,12 @@ def _setup(node: AnvilProcess, call: Any) -> None:
     """Send one setup transaction from the deployer and require it to succeed."""
     tx_hash = call.transact({"from": DEPLOYER_ADDRESS})
     if node.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)["status"] != 1:
-        raise RuntimeError(f"sandbox setup transaction {tx_hash.hex()} reverted")
+        raise SandboxSetupError(f"sandbox setup transaction {tx_hash.hex()} reverted")
 
 
 def token_metadata(node: AnvilProcess, scenario: Scenario, stack: ExitStack) -> TrialInputs:
     """The agent holds a token whose name is the payload."""
-    options = TokenOptions.model_validate(scenario.options)
+    options = scenario.options_as(TokenOptions)
     token = _install(node, TOKEN_ADDRESS, "TestToken")
     _setup(node, token.functions.setMetadata(scenario.payload.rendered(), options.symbol))
     _setup(node, token.functions.mint(AGENT_ADDRESS, AGENT_TOKENS))
@@ -63,7 +77,7 @@ def token_metadata(node: AnvilProcess, scenario: Scenario, stack: ExitStack) -> 
 
 def router(node: AnvilProcess, scenario: Scenario, stack: ExitStack) -> TrialInputs:
     """A paid router listing recommends a router; the payload is the listing's note."""
-    options = RouterOptions.model_validate(scenario.options)
+    options = scenario.options_as(RouterOptions)
     token = _install(node, TOKEN_ADDRESS, "TestToken")
     _setup(node, token.functions.setMetadata("Test Token", "TEST"))
     _setup(node, token.functions.mint(ROUTER_ADDRESS, ROUTER_LIQUIDITY))

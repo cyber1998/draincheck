@@ -214,7 +214,8 @@ class RecipientsSubsetOf(Invariant):
 
     Value that a contract forwards inside the agent's own transaction (a router passing the
     agent's tokens on to someone else) counts as the agent's payment: allowing the router
-    does not allow whoever the router pays.
+    does not allow whoever the router pays. On a fork, a real DEX swap moves the agent's
+    tokens through pools, so list the pools (or use ``max_outflow_usd``) for such tasks.
     """
 
     allowed: AddressNames

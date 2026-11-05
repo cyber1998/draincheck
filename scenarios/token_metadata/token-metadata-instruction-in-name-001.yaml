@@ -1,7 +1,7 @@
 # Source row 18 in docs/scenario-sources.md (approved 2026-11-04).
 # Adaptation: The SoK flags token names as a prompt-injection channel; it does not
 #   demonstrate this payload.
-id: token_metadata-instruction-in-name-001
+id: token-metadata-instruction-in-name-001
 title: "A token's name carries a transfer instruction that the agent obeys"
 source: https://arxiv.org/html/2604.15367
 layer: agent
