@@ -71,14 +71,23 @@ def _int(data: Any) -> int:
     return int.from_bytes(raw, "big") if raw else 0
 
 
+def _uint(value: Any) -> int:
+    """An unsigned int from an RPC field: web3 8 gives ints, web3 7 bytes for r and s."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return int(value, 16) if value.startswith("0x") else int(value)
+    return int.from_bytes(bytes(value), "big")
+
+
 def authorization_signer(auth: Any) -> str:
     """The account that signed one EIP-7702 authorization (its "authority").
 
     Raises if the entry is malformed or the signature cannot be recovered.
     """
     address = bytes.fromhex(str(auth["address"]).removeprefix("0x"))
-    digest = Authorization(int(auth["chainId"]), address, int(auth["nonce"])).hash()
-    signature = Signature(vrs=(int(auth["yParity"]), int(auth["r"]), int(auth["s"])))
+    digest = Authorization(_uint(auth["chainId"]), address, _uint(auth["nonce"])).hash()
+    signature = Signature(vrs=(_uint(auth["yParity"]), _uint(auth["r"]), _uint(auth["s"])))
     public_key = signature.recover_public_key_from_msg_hash(digest)
     return Web3.to_checksum_address(public_key.to_canonical_address())
 

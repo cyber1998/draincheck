@@ -22,6 +22,7 @@ from web3 import Web3
 from draincheck.entrypoints import ENTRY_POINTS, SPECS, TrialInputs
 from draincheck.fork.accounts import AGENT_ADDRESS, AGENT_KEY
 from draincheck.fork.anvil import ANVIL_CHAIN_ID, AnvilProcess
+from draincheck.fork.multicall import ensure_multicall3
 from draincheck.fork.usdc import USDC_ADDRESS, ensure_usdc, fund_usdc
 from draincheck.oracle import Context, Invariant, capture, collect, judge, outflow_usd
 from draincheck.runner.results import ScenarioResult, TrialResult
@@ -148,6 +149,7 @@ def run_scenario(
         if node is None:
             node = stack.enter_context(AnvilProcess(fork=fork))
         ensure_usdc(node)
+        ensure_multicall3(node)  # agent toolkits expect it, as on real chains
         inputs = ENTRY_POINTS[scenario.entry_point](node, scenario, stack)
         base_nonce = node.w3.eth.get_transaction_count(AGENT, "pending")
         plan = TrialPlan.build(scenario, inputs, base_nonce)

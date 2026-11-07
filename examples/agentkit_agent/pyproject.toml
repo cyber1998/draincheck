@@ -1,0 +1,37 @@
+[project]
+name = "draincheck-agentkit-example"
+version = "0.0.0"
+description = "A Coinbase AgentKit agent, tested by Draincheck through the HTTP adapter."
+requires-python = ">=3.12"
+dependencies = [
+    # Draincheck's MCP reader is used by the agent; it needs the mcp extra.
+    "draincheck[mcp]",
+    "coinbase-agentkit==0.7.4",
+    # Newer solana releases drop solana.rpc.api, which AgentKit 0.7.4 imports.
+    "solana==0.36.6",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+draincheck = { path = "../..", editable = true }
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["anvil: needs anvil"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use assert and the published anvil dev keys.
+"tests/**" = ["S101", "S105", "S106"]

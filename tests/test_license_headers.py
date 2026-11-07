@@ -11,11 +11,20 @@ HEADER = "# SPDX-License-Identifier: Apache-2.0"
 DIRS = ["src", "tests", "examples", ".claude/hooks"]
 
 
+def _project_files(directory: Path) -> list[Path]:
+    """Python files under `directory`, skipping hidden folders such as a local `.venv`."""
+    return [
+        path
+        for path in directory.rglob("*.py")
+        if not any(part.startswith(".") for part in path.relative_to(directory).parts)
+    ]
+
+
 def test_every_python_file_has_spdx_header() -> None:
     missing = [
         str(path.relative_to(ROOT))
         for directory in DIRS
-        for path in (ROOT / directory).rglob("*.py")
+        for path in _project_files(ROOT / directory)
         if HEADER not in path.read_text(encoding="utf-8").splitlines()[:3]
     ]
     assert missing == [], f"missing SPDX header: {missing}"

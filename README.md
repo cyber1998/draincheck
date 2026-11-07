@@ -83,6 +83,14 @@ default) or in the tool's description (`placement: description`), under any tool
 agent reaches the server at `services["mcp"]` in the `TrialEnv`. Install the extra with
 `pip install 'draincheck[mcp]'`.
 
+### Coinbase AgentKit agents
+
+AgentKit pins web3 below 8, so an AgentKit agent is its own project that installs Draincheck
+next to it, and Draincheck tests it through the HTTP adapter. Inside the service, build the
+agent with `draincheck.adapters.agentkit.agentkit_sandbox(env)`, which gives it a local dev
+wallet on an anvil network (chain id 31337). See
+[`examples/agentkit_agent`](examples/agentkit_agent).
+
 ## Development
 
 ```bash

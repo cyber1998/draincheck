@@ -91,6 +91,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   redirects.
 - 4 MCP scenarios from the approved list: tool shadowing, rug pull, line jumping and an
   attractive look-alike payment tool.
+- `draincheck.adapters.agentkit.agentkit_sandbox`: builds Coinbase AgentKit for a trial
+  with a local private-key wallet on an anvil network it registers (chain id 31337),
+  Draincheck's proxy-free RPC client, only action providers that make no outside calls
+  (wallet, ERC-20, WETH; checked by exact class), CDP credentials, `RPC_URL` and
+  `WEB3_PROVIDER_URI` hidden, and AgentKit's analytics silenced for the rest of the
+  process. AgentKit posts analytics to a Coinbase endpoint on every wallet setup and
+  action, with no setting to stop it. AgentKit agents run as their own project
+  (AgentKit pins web3 < 8) through the HTTP adapter; example in `examples/agentkit_agent`,
+  whose tests fail on any request to a host other than this machine.
+- A sandbox Multicall3 (`aggregate3` only) is installed at its canonical address on local
+  chains, never on a fork. Agent toolkits expect it on every chain; AgentKit's ERC-20
+  actions read token details through it.
+- CI runs the suite on web3 7 and the AgentKit example.
 
 ### Changed
 
@@ -126,6 +139,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- EIP-7702 authorizations were unreadable on web3 7, which returns r and s as bytes; a
+  delegation showed up only as an evidence gap.
+- The license-header test read files inside a local `.venv` under `examples/`.
 - A proxy set in the environment (`HTTP_PROXY`, `ALL_PROXY`, ...) or in the system
   settings would have carried Draincheck's local traffic, RPC calls and signed payments
   included, through that proxy and possibly off the machine: httpx and requests use

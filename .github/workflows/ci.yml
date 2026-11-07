@@ -57,3 +57,59 @@ jobs:
 
       - name: Build sdist and wheel
         run: uv build
+
+  web3-7:
+    name: Web3 7 (AgentKit compatibility)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install anvil (Foundry)
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Test on web3 7
+        env:
+          # A missing anvil must fail CI, never skip silently.
+          DRAINCHECK_REQUIRE_ANVIL: "1"
+        # AgentKit agents install Draincheck next to web3 7.
+        run: uv run --with 'web3>=7.6,<8' pytest
+
+  agentkit-example:
+    name: AgentKit example
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/agentkit_agent
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install anvil (Foundry)
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Test the AgentKit example
+        env:
+          # A missing anvil must fail CI, never skip silently.
+          DRAINCHECK_REQUIRE_ANVIL: "1"
+        run: uv run pytest
