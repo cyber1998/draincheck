@@ -37,11 +37,11 @@ from draincheck.fork.usdc import (
     usdc_balance,
     usdc_contract,
 )
-from draincheck.safety import assert_local_rpc
+from draincheck.safety import local_web3
 
 
 def _w3(anvil: AnvilProcess) -> Web3:
-    return Web3(Web3.HTTPProvider(assert_local_rpc(anvil.rpc_url)))
+    return local_web3(anvil.rpc_url)
 
 
 def _now(w3: Web3) -> int:

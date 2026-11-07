@@ -55,6 +55,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (entry-point settings, parsed once into the entry point's model; read them with
   `Scenario.options_as`), and the role names `router` and `token` for invariants.
 - Payload encodings `morse` and `unicode_homoglyph`.
+- `TrialEnv` refuses any key that is not one of anvil's ten published dev keys
+  (`draincheck.safety.assert_dev_key`, checked by the address the key signs for), so an
+  agent service never signs with a key it was sent that could hold real funds.
 - `draincheck.safety.assert_local_service`, which also accepts a `file://` path inside the
   system temp directory (never a network share or automounted path).
 - 17 sourced agent-layer scenarios from the approved list in `docs/scenario-sources.md`
@@ -66,6 +69,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tests/scenarios/test_library.py` checks every scenario file: valid, filed under its
   entry point, and failed by the vulnerable demo agent. Scenarios no longer need a test
   of their own.
+- HTTP adapter: `--agent http://127.0.0.1:PORT/path` tests an agent running as a local
+  service in any language. Draincheck POSTs each trial's `TrialEnv` as JSON and waits for
+  a 2xx; any other answer or a timeout counts as the agent crashing. Example in
+  `examples/http_agent`.
 
 ### Changed
 
@@ -89,6 +96,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   authorization hash instead of a hand-written RLP encoder.
 - `AnvilProcess.w3` gives one cached Web3 client per node. `AnvilProcess.fund_usdc` and
   `examples/vulnerable_agent/accounts.py` are removed.
+- `load_target` dispatches on the spec: a local URL goes to the HTTP adapter; anything else
+  is `module:function`. `TrialEnv` has `to_wire` / `from_wire`.
 
 ### Removed
 
@@ -97,6 +106,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A proxy set in the environment (`HTTP_PROXY`, `ALL_PROXY`, ...) or in the system
+  settings would have carried Draincheck's local traffic, RPC calls and signed payments
+  included, through that proxy and possibly off the machine: httpx and requests use
+  proxies even for 127.0.0.1. Every client is now built with `draincheck.safety.local_web3`
+  or `local_http_client`, which ignore proxies (environment, system settings and
+  host-keyed `<url>_proxy` variables) and never follow redirects. `requests`, already
+  installed with web3, is now a declared dependency so the RPC session can turn off
+  environment lookups; `types-requests` is a new dev dependency for mypy.
 - The `unicode_homoglyph` encoding changed the letters of an address written inside
   punctuation (`(0x...)`, `to:0x...`), so a real agent could not send to it and the
   scenario passed. Only text between hex values is changed now.

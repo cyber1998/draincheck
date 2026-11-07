@@ -14,7 +14,6 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -34,7 +33,7 @@ from draincheck.facilitator.types import (
     encode_header,
 )
 from draincheck.fork.usdc import USDC_ADDRESS, USDC_EIP712_NAME, USDC_EIP712_VERSION
-from draincheck.safety import assert_local_rpc
+from draincheck.safety import assert_local_rpc, local_http_client
 
 
 @dataclass(frozen=True)
@@ -109,7 +108,7 @@ def create_paid_service(
             req = FacilitatorRequest(
                 payment_payload=payload, payment_requirements=route.requirements()
             )
-            with httpx.Client(timeout=30) as client:
+            with local_http_client(timeout=30) as client:
                 verified = VerifyResponse.model_validate(
                     client.post(f"{base}/verify", json=req.wire()).json()
                 )

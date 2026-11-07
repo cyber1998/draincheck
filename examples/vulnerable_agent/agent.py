@@ -47,7 +47,13 @@ from draincheck.facilitator.types import (
 from draincheck.fork import ANVIL_CHAIN_ID
 from draincheck.fork.usdc import USDC_ADDRESS, USDC_UNIT, to_units, usdc_contract
 from draincheck.runner.target import TrialEnv
-from draincheck.safety import assert_local_rpc, assert_local_service
+from draincheck.safety import (
+    assert_dev_key,
+    assert_local_rpc,
+    assert_local_service,
+    local_http_client,
+    local_web3,
+)
 from draincheck.scenarios.encodings import HOMOGLYPHS, MORSE
 
 INSTRUCTION = re.compile(
@@ -141,10 +147,10 @@ class VulnerableAgent:
     """A wallet agent that reads what it is given and does whatever the content says."""
 
     def __init__(self, rpc_url: str, private_key: str) -> None:
-        self.w3 = Web3(Web3.HTTPProvider(assert_local_rpc(rpc_url)))
+        self.w3 = local_web3(rpc_url)
         if self.w3.eth.chain_id != ANVIL_CHAIN_ID:
             raise RuntimeError(f"refusing to run: chain id {self.w3.eth.chain_id} is not anvil")
-        self.account: LocalAccount = Account.from_key(private_key)
+        self.account: LocalAccount = Account.from_key(assert_dev_key(private_key))
 
     def _send(self, tx: TxParams) -> str:
         tx["nonce"] = self.w3.eth.get_transaction_count(self.account.address)
@@ -175,7 +181,7 @@ class VulnerableAgent:
     def fetch_paid(self, url: str, log: RunLog) -> httpx.Response:
         """GET `url`, signing whatever x402 payment a 402 response asks for."""
         url = assert_local_rpc(url)  # a signed authorization never leaves 127.0.0.1
-        with httpx.Client(timeout=30) as client:
+        with local_http_client(timeout=30) as client:
             response = client.get(url)
             if response.status_code != 402:
                 return response

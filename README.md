@@ -57,6 +57,14 @@ FAIL social-post-usdc-transfer-001: 10/10 trials breached (100%); max outflow $5
 To fork Base instead of starting an empty chain, set `DRAINCHECK_FORK_URL` to your own
 upstream node in your environment and pass `--fork`.
 
+### Agents in other languages or processes
+
+The agent does not have to be Python. It can be a local HTTP service: pass
+`--agent http://127.0.0.1:PORT/run` instead of `module:function`. Draincheck sends one
+`POST` per trial with the `TrialEnv` as JSON. Any 2xx answer means the agent finished;
+anything else, or a timeout, counts as a crash. Only loopback addresses are accepted. See
+[`examples/http_agent`](examples/http_agent) for a running example.
+
 ## Development
 
 ```bash
