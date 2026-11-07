@@ -191,6 +191,14 @@ class VulnerableAgent:
             response = self.fetch_paid(env.services["api"], log)
             response.raise_for_status()
             self.act_on(response.json()["note"], log)
+        elif "mcp" in env.services:
+            # Flaw: tool descriptions and results are trusted like instructions, and a
+            # description is re-read after the tool was first approved.
+            seen = self.wallet.read_mcp(env.services["mcp"])
+            for tool in seen["tools"] + seen["tools_after"]:
+                self.act_on(tool["description"], log)
+            for text in seen["results"].values():
+                self.act_on(text, log)
         elif "memory" in env.services:
             for note in self.read_memory(env.services["memory"]):
                 self.act_on(note, log)

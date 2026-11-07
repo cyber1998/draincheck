@@ -74,6 +74,15 @@ tools, and returns a graph. Draincheck runs the graph once per trial on the tria
 [`examples/langgraph_agent`](examples/langgraph_agent) for the factory contract, the tool list
 and a runnable example.
 
+### MCP
+
+An `api_response` scenario can serve its payload from a local MCP server: set
+`options: {transport: mcp}`. The payload goes in a tool result (`placement: result`, the
+default) or in the tool's description (`placement: description`), under any tool name
+(`tool`), and `rug_pull: true` makes the first listing benign and later ones hostile. The
+agent reaches the server at `services["mcp"]` in the `TrialEnv`. Install the extra with
+`pip install 'draincheck[mcp]'`.
+
 ## Development
 
 ```bash

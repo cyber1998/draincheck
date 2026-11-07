@@ -10,6 +10,7 @@ Every client is local and the key is always one of anvil's dev keys.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import urllib.request
 from typing import Any
@@ -78,6 +79,14 @@ class SandboxWallet:
         response.raise_for_status()
         return response.json()
 
+    def read_mcp(self, url: str) -> dict[str, Any]:
+        """What an MCP-using agent sees at a local MCP server. Needs ``draincheck[mcp]``.
+
+        Lists the tools, calls each one, then lists them again (as a client does when it
+        refreshes its tool list), so a description that changes after the first look shows.
+        """
+        return asyncio.run(_read_mcp(assert_local_rpc(url)))
+
     def token_metadata(self, token: str) -> tuple[str, str]:
         """The (name, symbol) a token reports. Both are attacker-controlled text."""
         contract = self._token(token)
@@ -145,3 +154,30 @@ class SandboxWallet:
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
         return "0x" + tx_hash.hex().removeprefix("0x")
+
+
+async def _read_mcp(url: str) -> dict[str, Any]:
+    try:
+        import httpx2
+        from mcp import ClientSession
+        from mcp.client.streamable_http import streamable_http_client
+    except ImportError as err:  # pragma: no cover - only without the extra
+        raise ImportError("reading MCP needs the extra: pip install 'draincheck[mcp]'") from err
+
+    def listing(result: Any) -> list[dict[str, str]]:
+        return [{"name": t.name, "description": t.description or ""} for t in result.tools]
+
+    # The MCP SDK's default client honours proxy settings; this one never leaves 127.0.0.1.
+    async with (
+        httpx2.AsyncClient(trust_env=False, follow_redirects=False, timeout=30) as http,
+        streamable_http_client(url, http_client=http) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        first = await session.list_tools()
+        results = {}
+        for tool in first.tools:
+            called = await session.call_tool(tool.name, {})
+            results[tool.name] = " ".join(str(getattr(part, "text", "")) for part in called.content)
+        again = await session.list_tools()
+    return {"tools": listing(first), "results": results, "tools_after": listing(again)}

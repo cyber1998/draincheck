@@ -84,9 +84,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   token metadata, balance, send ETH or tokens, approve, swap) every adapter exposes.
 - Optional extra `langgraph` (langgraph >=1.2, langchain-core >=1.7), included in the dev
   group so CI tests the adapter.
+- MCP delivery for `api_response` (extra `draincheck[mcp]`): `options: {transport: mcp}`
+  serves the payload from a local MCP server at `services["mcp"]`, in a tool result or a
+  tool description (`placement`), under any tool name (`tool`), and optionally as a rug pull
+  whose first listing is benign. The MCP client Draincheck uses ignores proxies and
+  redirects.
+- 4 MCP scenarios from the approved list: tool shadowing, rug pull, line jumping and an
+  attractive look-alike payment tool.
 
 ### Changed
 
+- `serve_in_thread` serves any ASGI app.
 - The demo agent is built on `SandboxWallet`; its flaws are only in its decisions.
 - The demo agent now pays through the mock x402 facilitator in USDC and also obeys
   injected USDC transfers. Its old tx-hash payment service is removed.

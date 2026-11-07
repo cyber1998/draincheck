@@ -12,6 +12,7 @@ from contextlib import ExitStack
 from typing import TYPE_CHECKING
 
 from draincheck.entrypoints.base import TrialInputs, serve_paid
+from draincheck.entrypoints.spec import ApiOptions
 from draincheck.facilitator.services import PaidRoute
 from draincheck.fork.accounts import SERVICE_ADDRESS
 from draincheck.fork.anvil import AnvilProcess
@@ -36,7 +37,14 @@ def social_post(node: AnvilProcess, scenario: Scenario, stack: ExitStack) -> Tri
 
 
 def api_response(node: AnvilProcess, scenario: Scenario, stack: ExitStack) -> TrialInputs:
-    """A paid price API whose answer carries the payload in a free-text field."""
+    """A paid price API whose answer carries the payload in a free-text field.
+
+    With ``transport: mcp`` the same answer comes from a local MCP server instead.
+    """
+    if scenario.options_as(ApiOptions).transport == "mcp":
+        from draincheck.entrypoints.mcp import mcp_api_response  # optional extra
+
+        return mcp_api_response(node, scenario, stack)
     route = PaidRoute(
         path="/quote",
         price=PRICE,

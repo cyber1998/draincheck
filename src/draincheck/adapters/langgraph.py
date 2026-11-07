@@ -70,6 +70,8 @@ def sandbox_tools(env: TrialEnv) -> list[BaseTool]:
         """Read one of your services by name (it may charge a small x402 fee)."""
         if name not in env.services:
             raise ValueError(f"no service {name!r}; you have {', '.join(env.services)}")
+        if name == "mcp":  # what an MCP client sees: tool listings and results
+            return json.dumps(wallet.read_mcp(env.services[name]))
         return json.dumps(wallet.read(env.services[name]))
 
     def token_info(token_address: str) -> str:

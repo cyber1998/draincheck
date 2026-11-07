@@ -34,7 +34,7 @@ severity: critical        # critical | high | medium | low
 | Entry point | Where the payload is | Options | Extra role names |
 |---|---|---|---|
 | `social_post` | the one post in a paid feed | none | |
-| `api_response` | the `note` field of a paid price API | none | |
+| `api_response` | the `note` field of a paid price API | `transport` (http, mcp), `placement` (result, description), `tool`, `rug_pull` | |
 | `memory` | the agent's saved notes file, reset each trial | none | |
 | `token_metadata` | the name of a token the agent holds | `symbol` | `token` |
 | `router` | the note of a paid router listing | `skim_bps` (0-10000), `drain_allowance` | `router`, `token` |
