@@ -38,8 +38,17 @@ Changelog = "https://github.com/cyber1998/draincheck/blob/main/CHANGELOG.md"
 [project.scripts]
 draincheck = "draincheck.cli:app"
 
+[project.optional-dependencies]
+# Test LangGraph agents in-process (draincheck.adapters.langgraph).
+# langsmith comes with langchain-core; the adapter imports it to keep tracing off.
+langgraph = ["langgraph>=1.2,<2", "langchain-core>=1.7,<2", "langsmith>=0.14"]
+# Serve a scenario's payload from a local MCP server; httpx2 is the MCP client's HTTP
+# library, imported to build a proxy-free client.
+mcp = ["mcp>=2.3,<3", "httpx2>=2.10"]
+
 [dependency-groups]
 dev = [
+    "draincheck[langgraph,mcp]",
     "mypy>=1.11",
     "pytest>=8.3",
     "ruff>=0.6",
@@ -70,6 +79,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PT"]
 strict = true
 python_version = "3.12"
 files = ["src", "tests", "examples"]
+exclude = ["examples/agentkit_agent/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -74,11 +74,19 @@ def load_target(spec: str) -> AgentTarget:
     - ``package.module:function``: a Python function taking a :class:`TrialEnv`.
     - ``http://127.0.0.1:PORT/path``: an agent running as a local HTTP service (see
       :mod:`draincheck.adapters.http`).
+    - ``langgraph:package.module:factory``: a LangGraph agent (needs the ``langgraph``
+      extra; see :mod:`draincheck.adapters.langgraph`).
+
+    Adapters are imported only when used, so optional extras stay optional.
     """
     if spec.startswith(("http://", "https://")):
         from draincheck.adapters.http import http_target
 
         return http_target(spec)
+    if spec.startswith("langgraph:"):
+        from draincheck.adapters.langgraph import langgraph_target
+
+        return langgraph_target(spec.removeprefix("langgraph:"))
     return python_target(spec)
 
 

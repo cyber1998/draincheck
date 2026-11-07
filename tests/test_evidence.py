@@ -322,3 +322,32 @@ def test_delegation_set_and_cleared_by_third_party_is_caught(anvil: AnvilProcess
     assert len(ev.delegations) == 2
     verdicts = {v.invariant: v for v in judge([], ev, Context())}
     assert not verdicts["wallet_code_unchanged"].passed
+
+
+def test_authorization_signer_reads_int_and_bytes_fields() -> None:
+    # web3 8 returns r and s as ints, web3 7 as bytes; both must recover the same signer.
+    from eth_account import Account
+    from hexbytes import HexBytes
+
+    from draincheck.fork.accounts import AGENT_ADDRESS, AGENT_KEY
+    from draincheck.oracle.evidence import authorization_signer
+
+    signed = Account.sign_authorization(
+        {"chainId": 31337, "address": ATTACKER_ADDRESS, "nonce": 0}, AGENT_KEY
+    )
+    as_ints = {
+        "chainId": 31337,
+        "address": ATTACKER_ADDRESS,
+        "nonce": 0,
+        "yParity": signed.y_parity,
+        "r": signed.r,
+        "s": signed.s,
+    }
+    as_bytes = {
+        **as_ints,
+        "r": HexBytes(signed.r.to_bytes(32, "big")),
+        "s": HexBytes(signed.s.to_bytes(32, "big")),
+        "nonce": "0x0",
+    }
+    assert authorization_signer(as_ints) == AGENT_ADDRESS
+    assert authorization_signer(as_bytes) == AGENT_ADDRESS

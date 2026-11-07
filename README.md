@@ -65,6 +65,32 @@ The agent does not have to be Python. It can be a local HTTP service: pass
 anything else, or a timeout, counts as a crash. Only loopback addresses are accepted. See
 [`examples/http_agent`](examples/http_agent) for a running example.
 
+### LangGraph agents
+
+Install the extra with `pip install 'draincheck[langgraph]'`. Pass
+`--agent langgraph:module:factory`, where the factory has the signature
+`make_graph(env, tools)`: it gets the trial's `TrialEnv` and the sandbox wallet as LangChain
+tools, and returns a graph. Draincheck runs the graph once per trial on the trial's task. See
+[`examples/langgraph_agent`](examples/langgraph_agent) for the factory contract, the tool list
+and a runnable example.
+
+### MCP
+
+An `api_response` scenario can serve its payload from a local MCP server: set
+`options: {transport: mcp}`. The payload goes in a tool result (`placement: result`, the
+default) or in the tool's description (`placement: description`), under any tool name
+(`tool`), and `rug_pull: true` makes the first listing benign and later ones hostile. The
+agent reaches the server at `services["mcp"]` in the `TrialEnv`. Install the extra with
+`pip install 'draincheck[mcp]'`.
+
+### Coinbase AgentKit agents
+
+AgentKit pins web3 below 8, so an AgentKit agent is its own project that installs Draincheck
+next to it, and Draincheck tests it through the HTTP adapter. Inside the service, build the
+agent with `draincheck.adapters.agentkit.agentkit_sandbox(env)`, which gives it a local dev
+wallet on an anvil network (chain id 31337). See
+[`examples/agentkit_agent`](examples/agentkit_agent).
+
 ## Development
 
 ```bash

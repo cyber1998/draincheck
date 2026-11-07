@@ -75,8 +75,7 @@ How to read the table:
 
 | Rows | Where |
 |---|---|
-| 1–5, 9, 11–13, 15, 17, 18, 24–28 | Written: `scenarios/<entry_point>/<id>.yaml` (17 files) |
-| 6, 7, 8, 14 | Wait for the MCP adapter (M4): the payload is a tool description, not tool output |
+| 1–9, 11–15, 17, 18, 24–28 | Written: `scenarios/<entry_point>/<id>.yaml` (21 files) |
 | 10, 16, 19–23, 29–34 | Wait for the policy fuzzer (M5): a deterministic guardrail or a token choice is under test |
 
 Written scenarios adapt their source where the sandbox needs it (for example, a

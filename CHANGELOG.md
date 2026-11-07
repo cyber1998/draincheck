@@ -73,9 +73,42 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   service in any language. Draincheck POSTs each trial's `TrialEnv` as JSON and waits for
   a 2xx; any other answer or a timeout counts as the agent crashing. Example in
   `examples/http_agent`.
+- LangGraph adapter (`--agent langgraph:module:factory`, extra `draincheck[langgraph]`): your
+  factory gets the trial's `TrialEnv` and the sandbox wallet as LangChain tools and returns a
+  graph; Draincheck runs it on the trial's task. Tool errors (a bad amount, a reverted
+  transaction) go back to the model as tool messages. LangSmith tracing is forced off for
+  every trial, so `LANGSMITH_TRACING` or `LANGCHAIN_TRACING_V2` in the environment can't post
+  trial data to a hosted service. Example with a scripted naive model in
+  `examples/langgraph_agent`.
+- `draincheck.adapters.tools.SandboxWallet`: the honest wallet primitives (read a service,
+  token metadata, balance, send ETH or tokens, approve, swap) every adapter exposes.
+- Optional extra `langgraph` (langgraph >=1.2, langchain-core >=1.7), included in the dev
+  group so CI tests the adapter.
+- MCP delivery for `api_response` (extra `draincheck[mcp]`): `options: {transport: mcp}`
+  serves the payload from a local MCP server at `services["mcp"]`, in a tool result or a
+  tool description (`placement`), under any tool name (`tool`), and optionally as a rug pull
+  whose first listing is benign. The MCP client Draincheck uses ignores proxies and
+  redirects.
+- 4 MCP scenarios from the approved list: tool shadowing, rug pull, line jumping and an
+  attractive look-alike payment tool.
+- `draincheck.adapters.agentkit.agentkit_sandbox`: builds Coinbase AgentKit for a trial
+  with a local private-key wallet on an anvil network it registers (chain id 31337),
+  Draincheck's proxy-free RPC client, only action providers that make no outside calls
+  (wallet, ERC-20, WETH; checked by exact class), CDP credentials, `RPC_URL` and
+  `WEB3_PROVIDER_URI` hidden, and AgentKit's analytics silenced for the rest of the
+  process. AgentKit posts analytics to a Coinbase endpoint on every wallet setup and
+  action, with no setting to stop it. AgentKit agents run as their own project
+  (AgentKit pins web3 < 8) through the HTTP adapter; example in `examples/agentkit_agent`,
+  whose tests fail on any request to a host other than this machine.
+- A sandbox Multicall3 (`aggregate3` only) is installed at its canonical address on local
+  chains, never on a fork. Agent toolkits expect it on every chain; AgentKit's ERC-20
+  actions read token details through it.
+- CI runs the suite on web3 7 and the AgentKit example.
 
 ### Changed
 
+- `serve_in_thread` serves any ASGI app.
+- The demo agent is built on `SandboxWallet`; its flaws are only in its decisions.
 - The demo agent now pays through the mock x402 facilitator in USDC and also obeys
   injected USDC transfers. Its old tx-hash payment service is removed.
 - `TrialEnv` replaces `feed_url` with `task`, `services` (name to local URL) and
@@ -106,6 +139,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- EIP-7702 authorizations were unreadable on web3 7, which returns r and s as bytes; a
+  delegation showed up only as an evidence gap.
+- The license-header test read files inside a local `.venv` under `examples/`.
 - A proxy set in the environment (`HTTP_PROXY`, `ALL_PROXY`, ...) or in the system
   settings would have carried Draincheck's local traffic, RPC calls and signed payments
   included, through that proxy and possibly off the machine: httpx and requests use

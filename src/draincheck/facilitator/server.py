@@ -22,6 +22,7 @@ import uvicorn
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
 from fastapi import FastAPI
+from starlette.types import ASGIApp
 from web3 import Web3
 from web3.exceptions import ContractLogicError
 
@@ -256,7 +257,7 @@ def create_facilitator_app(facilitator: Facilitator) -> FastAPI:
 
 
 @contextmanager
-def serve_in_thread(app: FastAPI, port: int) -> Iterator[str]:
+def serve_in_thread(app: ASGIApp, port: int) -> Iterator[str]:
     """Run `app` on 127.0.0.1:`port` in a background thread; yield its base URL."""
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
