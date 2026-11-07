@@ -38,8 +38,14 @@ Changelog = "https://github.com/cyber1998/draincheck/blob/main/CHANGELOG.md"
 [project.scripts]
 draincheck = "draincheck.cli:app"
 
+[project.optional-dependencies]
+# Test LangGraph agents in-process (draincheck.adapters.langgraph).
+# langsmith comes with langchain-core; the adapter imports it to keep tracing off.
+langgraph = ["langgraph>=1.2,<2", "langchain-core>=1.7,<2", "langsmith>=0.14"]
+
 [dependency-groups]
 dev = [
+    "draincheck[langgraph]",
     "mypy>=1.11",
     "pytest>=8.3",
     "ruff>=0.6",

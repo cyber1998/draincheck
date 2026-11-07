@@ -65,6 +65,15 @@ The agent does not have to be Python. It can be a local HTTP service: pass
 anything else, or a timeout, counts as a crash. Only loopback addresses are accepted. See
 [`examples/http_agent`](examples/http_agent) for a running example.
 
+### LangGraph agents
+
+Install the extra with `pip install 'draincheck[langgraph]'`. Pass
+`--agent langgraph:module:factory`, where the factory has the signature
+`make_graph(env, tools)`: it gets the trial's `TrialEnv` and the sandbox wallet as LangChain
+tools, and returns a graph. Draincheck runs the graph once per trial on the trial's task. See
+[`examples/langgraph_agent`](examples/langgraph_agent) for the factory contract, the tool list
+and a runnable example.
+
 ## Development
 
 ```bash
